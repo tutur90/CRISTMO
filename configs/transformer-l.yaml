@@ -1,0 +1,32 @@
+seed: 42
+
+logger:
+  save_dir: logs
+  name: transformer-baseline-l
+  project: cerebro
+  entity: null  # your wandb username/team (optional, uses default if null)
+  tags:  # optional tags for organization
+    - transformer
+    - baseline
+  notes: "Transformer baseline experiment with 512 hidden dim"  # optional experiment description
+
+model_type: transformer
+data:
+  data_path: data/futures/dataset/
+  src_length: 24
+  tgt_length: 1
+  seg_length: 60
+  batch_size: 512
+  num_workers: 0
+
+model:
+  input_dim: 4
+  hidden_dim: 512
+  output_dim: 3
+  seg_length: 60
+  num_layers: 6
+  lr: 0.0001
+
+trainer:
+  max_epochs: 20
+  eval_every_n_steps: 1000

@@ -1,0 +1,8 @@
+.vscode/
+__pycache__/
+test.py
+logs/
+data/*
+!data/*.py
+!data/*.sh
+.cache/

@@ -1,0 +1,38 @@
+seed: 42
+
+logger:
+  save_dir: logs
+  name: lstm-baseline-m
+  project: cerebro
+  entity: null  # your wandb username/team (optional, uses default if null)
+  tags:  # optional tags for organization
+    - lstm
+    - baseline
+  notes: "LSTM baseline experiment with 64 hidden dim"  # optional experiment description
+
+data:
+  data_path: data/futures/dataset/
+  src_length: 24
+  tgt_length: 1
+  seg_length: &seg_length 60
+  batch_size: 512
+  num_workers: 0
+
+model:
+  type: lstm
+  input_dim: 4
+  hidden_dim: 128
+  output_dim: 3
+  seg_length: *seg_length
+  num_layers: 2
+  lr: 1.e-3
+  # weight_decay: 0.001
+  scheduler:
+    type: ReduceLROnPlateau
+    factor: 0.5
+    patience: 3
+
+trainer:
+  max_epochs: 8
+  eval_every_n_steps: 500
+  log_every_n_steps: 200
