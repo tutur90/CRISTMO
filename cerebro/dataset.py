@@ -34,8 +34,7 @@ class CryptoDataset(Dataset):
         features: Optional[List[str]] = None,
         normalize: bool = False,
         tgt_symbol: Optional[str] = None,
-        use_fp16: bool = True,  # Use float16 for 50% memory savings
-        memory_map: bool = False,  # Memory-map the data file
+        use_fp16: bool = False,  # Use float16 for 50% memory savings
         **kwargs
     ):
         super().__init__()
@@ -55,14 +54,13 @@ class CryptoDataset(Dataset):
         self.features = features or ['open', 'high', 'low', 'close']
         self.normalize = normalize
         self.use_fp16 = use_fp16
-        self.memory_map = memory_map
         
         # Choose dtype based on precision needs
         self.dtype = np.float16 if use_fp16 else np.float32
         
         self._validate_parameters()
-        
-        logger.info(f"Initializing {split} dataset (fp16={use_fp16}, mmap={memory_map})...")
+
+        logger.debug(f"Initializing {split} dataset (fp16={use_fp16})...")
         data_file = Path(data_path) / f"{split}"
         
 
@@ -119,7 +117,7 @@ class CryptoDataset(Dataset):
         
         # Verify required columns
         required_cols = ["time", "symbol"] + self.features
-        missing_cols = set(required_cols) - set(df.columns)
+        missing_cols = set(required_cols) - set(df.collect_schema().names())
         if missing_cols:
             raise ValueError(f"Missing required columns: {missing_cols}")
         
@@ -171,14 +169,14 @@ class CryptoDataset(Dataset):
         # Clear the DataFrame to free memory
         del self.data_df
         
-        logger.info("Numpy conversion complete, DataFrame cleared")
+        logger.debug("Numpy conversion complete, DataFrame cleared")
     
     def _create_indices(self) -> np.ndarray:
         """
         Create valid indices using vectorized numpy operations.
         Uses uint32 for indices (sufficient for up to 4 billion samples).
         """
-        logger.info("Creating valid indices...")
+        logger.debug("Creating valid indices...")
         
         total_length = self.src_length + self.tgt_length
         n_rows = len(self.times)
@@ -345,7 +343,6 @@ class CryptoDataset(Dataset):
             'coverage': f"{100*len(self)/(len(self.feature_data)-self.src_length-self.tgt_length):.1f}%",
             'memory_mb': f"{memory_mb:.1f}",
             'dtype': str(self.dtype),
-            'memory_mapped': self.memory_map
         }
     
     def __repr__(self) -> str:
@@ -429,7 +426,7 @@ if __name__ == "__main__":
     # Test with different memory settings
     print("\n1. Testing with FP16 (50% memory savings)...")
     dataset_fp16 = CryptoDataset(
-        data_path="data/futures/processed",
+        data_path="data/futures/datasets/",
         split="train",
         symbols=["BTCUSDT", "ETHUSDT", "BNBUSDT", "XRPUSDT", "ADAUSDT"],
         src_length=24,

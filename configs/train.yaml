@@ -1,0 +1,87 @@
+# PyTorch Lightning CLI Configuration
+seed: 42
+
+# Trainer configuration
+trainer:
+  max_epochs: 100
+  accelerator: auto
+  devices: auto
+  precision: 16-mixed
+  gradient_clip_val: 1.0
+  log_every_n_steps: 50
+  
+  # Callbacks
+  callbacks:
+    - class_path: pytorch_lightning.callbacks.ModelCheckpoint
+      init_args:
+        monitor: val/loss
+        mode: min
+        save_top_k: 3
+        save_last: true
+        filename: "epoch={epoch}-val_loss={val/loss:.4f}"
+        dirpath: logs/checkpoints
+        verbose: true
+        auto_insert_metric_name: false
+    
+    - class_path: pytorch_lightning.callbacks.EarlyStopping
+      init_args:
+        monitor: val/loss
+        patience: 10
+        mode: min
+        verbose: true
+        min_delta: 0.0001
+    
+    - class_path: pytorch_lightning.callbacks.LearningRateMonitor
+      init_args:
+        logging_interval: step
+  
+  # Logger
+  logger:
+    class_path: pytorch_lightning.loggers.WandbLogger
+    init_args:
+      project: crypto-prediction
+      name: vanilla_lstm_experiment
+      save_dir: logs
+      log_model: true
+
+# Model configuration
+model:
+  model_type: lstm
+  learning_rate: 0.001
+  weight_decay: 0.0
+  optimizer: adam
+  scheduler: reduce_on_plateau
+  scheduler_kwargs:
+    factor: 0.5
+    patience: 5
+    min_lr: 1.0e-6
+    verbose: true
+  
+  # LSTM Model specific parameters
+  input_dim: 4  # Number of input features (open, high, low, close)
+  hidden_dim: 64
+  output_dim: 3  # Number of output predictions
+  seg_length: 60  # Sequence length (must match data.sequence_length)
+  num_layers: 2
+  conv_kernel: 3  # Convolution kernel size (set to null to disable)
+  pool_kernel: 2  # Pooling kernel size (set to null to disable)
+  dropout: 0.0  # Dropout for LSTM layers
+  num_symbols: 100  # Maximum number of unique symbols for embedding
+
+# Data configuration
+data:
+  batch_size: 32
+  num_workers: 4
+  
+  # Dataset specific parameters
+  data_dir: data/processed
+  sequence_length: 60
+  prediction_horizon: 1
+  features:
+    - open
+    - high
+    - low
+    - close
+    - volume
+  target: close
+  normalize: false
