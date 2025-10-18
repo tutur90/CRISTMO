@@ -1,306 +1,178 @@
-import torch
-import torch.nn as nn
-from torch.utils.data import DataLoader
-import pytorch_lightning as pl
-from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping, LearningRateMonitor
-from pytorch_lightning.loggers import WandbLogger
-import yaml
-from argparse import ArgumentParser
+import logging
+from math import e
 import os
-import numpy as np
-import random
-from pathlib import Path
+import sys
 
-from cerebro.dataset import CryptoDataset
+import transformers
+
+from transformers.trainer_utils import get_last_checkpoint
+from transformers import Trainer, TrainingArguments, HfArgumentParser, set_seed
+
+from cerebro.args import DataTrainingArguments, ModelArguments
 from cerebro.loss import RelativeMSELoss
-from cerebro.utils import load_config
+from cerebro.models import model
 from cerebro.models.lstm import LSTMModel
 from cerebro.models.transformer import TransformerModel
+from cerebro.dataset import CryptoDataset   
 
 
-class CryptoLightningModule(pl.LightningModule):
-    """PyTorch Lightning wrapper for crypto prediction models."""
-    
-    def __init__(self, model: nn.Module, config: dict):
-        super().__init__()
-        self.model = model
-        self.config = config
-        self.save_hyperparameters(config)
-        
-    def forward(self, x):
-        return self.model(x)
-    
-    def training_step(self, batch, batch_idx):
-        x, y = batch
-        loss = self.model.training_step(x, y)
-        
-        self.log('train/loss', loss, on_step=True, on_epoch=True, prog_bar=True)
-        return loss
-    
-    def validation_step(self, batch, batch_idx):
-        
-        loss = self.model.validation_step(batch)
-        
-        self.log('val/loss', loss, on_step=False, on_epoch=True, prog_bar=True)
-        return loss
-    
-    def test_step(self, batch, batch_idx):
-        loss = self.model.validation_step(batch)
-        
-        self.log('test/loss', loss, on_step=False, on_epoch=True)
-        return loss
-    
-    def configure_optimizers(self):
-        optimizer_config = self.config.get("optimizer", {})
-        optimizer_type = optimizer_config.get("type", "adam").lower()
-        lr = optimizer_config.get("lr", 1e-3)
-        weight_decay = optimizer_config.get("weight_decay", 0.0)
-        
-        # Initialize optimizer
-        if optimizer_type == "adam":
-            optimizer = torch.optim.Adam(
-                self.parameters(),
-                lr=lr,
-                weight_decay=weight_decay
-            )
-        elif optimizer_type == "adamw":
-            optimizer = torch.optim.AdamW(
-                self.parameters(),
-                lr=lr,
-                weight_decay=weight_decay
-            )
-        elif optimizer_type == "sgd":
-            momentum = optimizer_config.get("momentum", 0.9)
-            optimizer = torch.optim.SGD(
-                self.parameters(),
-                lr=lr,
-                momentum=momentum,
-                weight_decay=weight_decay
-            )
-        else:
-            raise ValueError(f"Unknown optimizer: {optimizer_type}")
-        
-        # Setup learning rate scheduler if configured
-        scheduler_config = self.config.get("scheduler", None)
-        if scheduler_config is None:
-            return optimizer
-        
-        scheduler_type = scheduler_config.get("type", "none").lower()
-        
-        if scheduler_type == "none":
-            return optimizer
-        elif scheduler_type == "step":
-            scheduler = torch.optim.lr_scheduler.StepLR(
-                optimizer,
-                step_size=scheduler_config.get("step_size", 10),
-                gamma=scheduler_config.get("gamma", 0.1)
-            )
-        elif scheduler_type == "cosine":
-            scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-                optimizer,
-                T_max=scheduler_config.get("T_max", 50),
-                eta_min=scheduler_config.get("eta_min", 0)
-            )
-        elif scheduler_type == "plateau":
-            scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-                optimizer,
-                mode='min',
-                factor=scheduler_config.get("factor", 0.5),
-                patience=scheduler_config.get("patience", 5)
-            )
-            return {
-                "optimizer": optimizer,
-                "lr_scheduler": {
-                    "scheduler": scheduler,
-                    "monitor": "val/loss",
-                    "interval": "epoch",
-                    "frequency": 1
-                }
-            }
-        else:
-            raise ValueError(f"Unknown scheduler: {scheduler_type}")
-        
-        return {
-            "optimizer": optimizer,
-            "lr_scheduler": {
-                "scheduler": scheduler,
-                "interval": "epoch",
-                "frequency": 1
-            }
-        }
 
+logger = logging.getLogger(__name__)
 
-def set_seed(seed: int):
-    """Set random seeds for reproducibility."""
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    random.seed(seed)
-    pl.seed_everything(seed, workers=True)
-
+class CustomTrainer(Trainer):
+    """
+    Custom Trainer to handle our specific model outputs.
+    """
+    
 
 def main():
-    parser = ArgumentParser(description="Train cryptocurrency price prediction model")
-    parser.add_argument(
-        "config", 
-        type=str, 
-        default="configs/vanilla_lstm.yaml", 
-        help="Path to config file"
-    )
-    parser.add_argument(
-        "--resume", 
-        type=str, 
-        default=None, 
-        help="Path to checkpoint to resume training"
-    )
-    args = parser.parse_args()
 
-    # Load configuration
-    config = load_config(args.config)
-
-    print("="*70)
-    print("CONFIGURATION")
-    print("="*70)
-    print(yaml.dump(config, default_flow_style=False))
-    print("="*70)
-
-    # Set random seed for reproducibility
-    set_seed(config.get("seed", 42))
-
-    # Create datasets
-    train_dataset = CryptoDataset(**config["data"])
-    val_dataset = CryptoDataset(**config["data"], split="val")
-    test_dataset = CryptoDataset(**config["data"], split="test")
+    parser = HfArgumentParser((ModelArguments, DataTrainingArguments, TrainingArguments))
     
-    # Create data loaders
-    train_loader = DataLoader(
-        train_dataset,
-        batch_size=config["data"]["batch_size"],
-        shuffle=True,
-        num_workers=config["data"].get("num_workers", 0),
-        pin_memory=torch.cuda.is_available(),
-        persistent_workers=config["data"].get("num_workers", 0) > 0
-    )
     
-    val_loader = DataLoader(
-        val_dataset,
-        batch_size=config["data"]["batch_size"],
-        shuffle=False,
-        num_workers=config["data"].get("num_workers", 0),
-        pin_memory=torch.cuda.is_available(),
-        persistent_workers=config["data"].get("num_workers", 0) > 0
-    )
-    
-    test_loader = DataLoader(
-        test_dataset,
-        batch_size=config["data"]["batch_size"],
-        shuffle=False,
-        num_workers=config["data"].get("num_workers", 0),
-        pin_memory=torch.cuda.is_available(),
-        persistent_workers=config["data"].get("num_workers", 0) > 0
-    )
+    if len(sys.argv) == 2 and sys.argv[1].endswith(".json"):
+        # If we pass only one argument to the script and it's the path to a json file,
+        # let's parse it to get our arguments.
+        model_args, data_args, training_args = parser.parse_json_file(json_file=os.path.abspath(sys.argv[1]))
+    elif sys.argv[-1].endswith(".yaml"):
+        model_args, data_args, training_args = parser.parse_yaml_file(yaml_file=os.path.abspath(sys.argv[-1]))
 
-    # Initialize model
-    if config["model"]["type"] == "lstm":
-        base_model = LSTMModel(**config["model"], loss_fn=RelativeMSELoss())
-    elif config["model"]["type"] == "transformer":
-        base_model = TransformerModel(**config["model"], loss_fn=RelativeMSELoss())
+        
     else:
-        raise ValueError(f"Unknown model type: {config['model']['type']}")
-    
-    # Wrap in Lightning module
-    model = CryptoLightningModule(base_model, config)
-    
-    num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    print(f"Model has {num_params:,} trainable parameters")
+        model_args, data_args, training_args = parser.parse_args_into_dataclasses()
 
-    # Setup logger
-    save_dir = Path(config["logger"]["save_dir"])
-    save_dir.mkdir(parents=True, exist_ok=True)
-    
-    wandb_logger = WandbLogger(
-        project=config["logger"].get("project", "crypto-prediction"),
-        name=config["logger"].get("name", None),
-        save_dir=str(save_dir),
-        log_model=True
-    )
-    wandb_logger.experiment.config.update({"trainable_parameters": num_params})
-    wandb_logger.watch(model, log="all", log_freq=100)
+    if data_args.total_batch_size is not None:
+        training_args.gradient_accumulation_steps = data_args.total_batch_size // (training_args.per_device_train_batch_size * int(os.environ.get("WORLD_SIZE", 1))) + 1
+        logger.info(f"Setting gradient_accumulation_steps to {training_args.gradient_accumulation_steps} to match total_batch_size {data_args.total_batch_size}")
 
-    # Setup callbacks
-    checkpoint_callback = ModelCheckpoint(
-        dirpath=save_dir / "checkpoints",
-        filename='epoch={epoch:02d}-val_loss={val/loss:.4f}',
-        monitor='val/loss',
-        mode='min',
-        save_top_k=3,
-        save_last=True,
-        auto_insert_metric_name=False
+    # Setup logging
+    logging.basicConfig(
+        format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
+        datefmt="%m/%d/%Y %H:%M:%S",
+        handlers=[logging.StreamHandler(sys.stdout)],
     )
-    
-    early_stop_callback = EarlyStopping(
-        monitor='val/loss',
-        patience=config.get("early_stopping_patience", 10),
-        mode='min',
-        verbose=True
-    )
-    
-    lr_monitor = LearningRateMonitor(logging_interval='epoch')
-    
-    callbacks = [checkpoint_callback, lr_monitor]
-    
-    if config.get("early_stopping", True):
-        callbacks.append(early_stop_callback)
 
-    # Initialize trainer
-    trainer = pl.Trainer(
-        max_epochs=config.get("max_epochs", 100),
-        accelerator='auto',
-        devices='auto',
-        logger=wandb_logger,
-        callbacks=callbacks,
-        gradient_clip_val=config.get("gradient_clip_val", None),
-        accumulate_grad_batches=config.get("accumulate_grad_batches", 1),
-        precision=config.get("precision", 32),
-        deterministic=True,
-        enable_progress_bar=True,
-        enable_model_summary=True,
-        log_every_n_steps=config.get("log_every_n_steps", 50),
+    if training_args.should_log:
+        # The default of training_args.log_level is passive, so we set log level at info here to have that default.
+        transformers.utils.logging.set_verbosity_info()
+
+    log_level = training_args.get_process_log_level()
+    logger.setLevel(log_level)
+    transformers.utils.logging.set_verbosity(log_level)
+    transformers.utils.logging.enable_default_handler()
+    transformers.utils.logging.enable_explicit_format()
+
+    # Log on each process the small summary:
+    logger.warning(
+        f"Process rank: {training_args.local_rank}, device: {training_args.device}, n_gpu: {training_args.n_gpu}, "
+        + f"distributed training: {training_args.parallel_mode.value == 'distributed'}, 16-bits training: {training_args.fp16}"
+    )
+    logger.info(f"Training/evaluation parameters {training_args}")
+
+    # Detecting last checkpoint.
+    last_checkpoint = None
+    if os.path.isdir(training_args.output_dir) and training_args.do_train and not training_args.overwrite_output_dir:
+        last_checkpoint = get_last_checkpoint(training_args.output_dir)
+        if last_checkpoint is None and len(os.listdir(training_args.output_dir)) > 0:
+            raise ValueError(
+                f"Output directory ({training_args.output_dir}) already exists and is not empty. "
+                "Use --overwrite_output_dir to overcome."
+            )
+        elif last_checkpoint is not None and training_args.resume_from_checkpoint is None:
+            logger.info(
+                f"Checkpoint detected, resuming training at {last_checkpoint}. To avoid this behavior, change "
+                "the `--output_dir` or add `--overwrite_output_dir` to train from scratch."
+            )
+
+    # Set seed before initializing model.
+    set_seed(training_args.seed)
+
+    # Load datasets
+    
+    if training_args.do_train:
+
+        train_dataset = CryptoDataset(**data_args.__dict__, split="train")
+
+    if training_args.do_eval:
+        eval_dataset = CryptoDataset(**data_args.__dict__, split="val")
+
+
+    
+    if model_args.type == "lstm":
+        model = LSTMModel(**model_args.__dict__, loss_fn=RelativeMSELoss())
+    elif model_args.type == "transformer":
+        model = TransformerModel(**model_args.__dict__, loss_fn=RelativeMSELoss())
+    else:
+        raise ValueError(f"Unknown model type: {model_args.type}")
+    
+    
+    loss_fn = RelativeMSELoss()
+
+
+    # Initialize our Trainer
+    trainer = CustomTrainer(
+        model=model,
+        args=training_args,
+        train_dataset=train_dataset if training_args.do_train else None,
+        eval_dataset=eval_dataset if training_args.do_eval else None,
     )
     
-    # Train model
-    try:
-        trainer.fit(
-            model, 
-            train_dataloaders=train_loader, 
-            val_dataloaders=val_loader,
-            ckpt_path=args.resume
+    
+    # Training
+    if training_args.do_train:
+        checkpoint = None
+        if training_args.resume_from_checkpoint is not None:
+            checkpoint = training_args.resume_from_checkpoint
+        elif last_checkpoint is not None:
+            checkpoint = last_checkpoint
+        train_result = trainer.train(resume_from_checkpoint=checkpoint)
+        trainer.save_model()  # Saves the tokenizer too for easy upload
+
+        metrics = train_result.metrics
+
+        trainer.log_metrics("train", metrics)
+        trainer.save_metrics("train", metrics)
+        trainer.save_state()
+
+    
+    if training_args.do_eval:
+
+        logger.info("*** Evaluate ***")
+        
+        
+        results = trainer.evaluate()
+
+        metrics = results.metrics
+
+
+        trainer.log_metrics("eval", metrics)
+        trainer.save_metrics("eval", metrics)
+
+    if training_args.do_predict:
+        
+
+        logger.info("*** Predict ***")
+
+        test_dataset = CryptoDataset(**data_args.__dict__, split="test")
+
+
+        xsim_results = trainer.predict(test_dataset,  metric_key_prefix="predict"
+
         )
-        
-        # Test evaluation
-        print("="*50)
-        print("Running final test evaluation...")
-        test_results = trainer.test(model, dataloaders=test_loader, ckpt_path='best')
-        print("="*50)
-        
-        # Save final results
-        results = {
-            'best_val_loss': checkpoint_callback.best_model_score.item(),
-            'test_loss': test_results[0]['test/loss'],
-            'best_model_path': checkpoint_callback.best_model_path
-        }
-        
-        results_path = save_dir / "results.yaml"
-        with open(results_path, 'w') as f:
-            yaml.dump(results, f)
-        
-        print(f"\nResults saved to {results_path}")
-        print(f"Best model: {checkpoint_callback.best_model_path}")
-        
-    except KeyboardInterrupt:
-        print("Training interrupted by user")
-    
-    finally:
-        wandb_logger.experiment.finish()
+
+        metrics = xsim_results.metrics
+
+
+        trainer.log_metrics("predict", metrics)
+        trainer.save_metrics("predict", metrics)
+
+
+    return results
+
+
+def _mp_fn(index):
+    # For xla_spawn (TPUs)
+    main()
 
 
 if __name__ == "__main__":
