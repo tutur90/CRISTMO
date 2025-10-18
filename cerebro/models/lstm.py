@@ -215,11 +215,11 @@ class LSTMModel(nn.Module):
         loss = None
         if tgt is not None:
             # Handle different target shapes
-            if tgt.dim() == 2:
-                tgt = tgt.unsqueeze(1)  # (B, output_dim) -> (B, 1, output_dim)
-            loss = self.loss_fn(x, tgt)
+            # if tgt.dim() == 2:
+            #     tgt = tgt.unsqueeze(1)  # (B, output_dim) -> (B, 1, output_dim)
+            loss = self.loss_fn(x, tgt) * 1e6
 
-        return x, loss
+        return {"pred": x, "loss": loss}
 
     def predict(self, src: torch.Tensor, symbol: Optional[torch.Tensor] = None) -> torch.Tensor:
         """
