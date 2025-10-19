@@ -45,6 +45,13 @@ class ModelArguments:
     bidirectional: bool = field(
         default=False, metadata={"help": "Whether to use bidirectional LSTM."}
     )
+    conv_kernel: int = field(
+        default=5, metadata={"help": "The convolution kernel size."}
+    )
+    pool_kernel: Optional[int] = field(
+        default=1, metadata={"help": "The pooling kernel size."}
+    )
+
     
 
 
@@ -77,6 +84,17 @@ class DataTrainingArguments:
     # seg_length: Optional[int] = field(
     #     default=60, metadata={"help": "The segment length for the model."}
     # )
+    
+    
+    symbols: Optional[str] = field(
+        default=None, metadata={"help": "List of symbols to include in the dataset."}
+    )
+    tgt_symbol: Optional[str] = field(
+        default=None, metadata={"help": "Target symbol for prediction."}
+    )
+    start_date: Optional[str] = field(
+        default=None, metadata={"help": "Start date for filtering the dataset (YYYY-MM-DD)."}
+    )
 
 
     max_train_samples: Optional[int] = field(
@@ -106,3 +124,13 @@ class DataTrainingArguments:
             )
         },
     )
+    
+    def __post_init__(self):
+        if self.data_path is None:
+            raise ValueError("You must specify a data_path for the dataset.")
+        
+        if self.symbols is not None:
+            self.symbols = [s.strip() for s in self.symbols.split(",")]
+            
+        self.tgt_symbol = self.tgt_symbol.strip() if self.tgt_symbol is not None else None
+

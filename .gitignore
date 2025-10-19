@@ -6,3 +6,5 @@ data/*
 !data/*.py
 !data/*.sh
 .cache/
+checkpoints/
+wandb/

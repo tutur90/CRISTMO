@@ -3,9 +3,13 @@
 run_name: lstm 
 
 output_dir: checkpoints/lstm
+overwrite_output_dir: true
 
 # === Données ===
 data_path: data/futures/dataset/
+symbols: "BTCUSDT,ETHUSDT,BNBUSDT,XRPUSDT,SUIUSDT,SOLUSDT,ADAUSDT,DOGEUSDT,LTCUSDT,DOTUSDT"
+tgt_symbol: "BTCUSDT"
+start_date: "2020-01-01"
 
 # === Modèle ===
 
@@ -14,25 +18,26 @@ tgt_length: 1
 seg_length: 60
 type: lstm
 input_dim: 4
-hidden_dim: 128
+hidden_dim: 256
 output_dim: 3
 num_layers: 2
-dropout: 0.1  # Add dropout for regularization
+dropout: 0.0  # Add dropout for regularization
 bidirectional: false  # Set to true for bidirectional LSTM if supported
-
-
+conv_kernel: 5
+pool_kernel: 1
 
 # === Entraînement ===
+do_eval: true
 do_train: true
-per_device_train_batch_size: 64
-per_device_eval_batch_size: 64
+per_device_train_batch_size: 1024
+per_device_eval_batch_size: 1024
 # total_batch_size: 64 
 # gradient_accumulation_steps: 16
 
 max_steps: 10000
 save_steps: 1000
-eval_delay: 2000
-eval_steps: 1000
+eval_delay: 500
+eval_steps: 500
 eval_strategy: steps
 prediction_loss_only: true
 load_best_model_at_end: true
@@ -42,20 +47,20 @@ disable_tqdm: false
 
 ddp_find_unused_parameters: false
 logging_steps: 100
-save_total_limit: 5
-report_to: []
+save_total_limit: 3
+report_to: ["wandb"]
 
 
-dataloader_num_workers: 16
+dataloader_num_workers: 32
 dataloader_drop_last: false
 dataloader_pin_memory : true
 
 
-learning_rate: 8.e-4
-lr_scheduler_type: inverse_sqrt
+learning_rate: 2.e-4
+lr_scheduler_type: cosine
 warmup_steps: 500
-max_grad_norm: 1.0
-weight_decay: 0.0005
+max_grad_norm: 2.0
+# weight_decay: 0.0005
 
 
 bf16: false

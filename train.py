@@ -91,10 +91,10 @@ def main():
     
     if training_args.do_train:
 
-        train_dataset = CryptoDataset(**data_args.__dict__, split="train")
+        train_dataset = CryptoDataset(**data_args.__dict__, **model_args.__dict__, split="train")
 
     if training_args.do_eval:
-        eval_dataset = CryptoDataset(**data_args.__dict__, split="val")
+        eval_dataset = CryptoDataset(**data_args.__dict__, **model_args.__dict__, split="val")
 
 
     
@@ -142,11 +142,9 @@ def main():
         
         results = trainer.evaluate()
 
-        metrics = results.metrics
 
-
-        trainer.log_metrics("eval", metrics)
-        trainer.save_metrics("eval", metrics)
+        trainer.log_metrics("eval", results)
+        trainer.save_metrics("eval", results)
 
     if training_args.do_predict:
         
@@ -156,15 +154,13 @@ def main():
         test_dataset = CryptoDataset(**data_args.__dict__, split="test")
 
 
-        xsim_results = trainer.predict(test_dataset,  metric_key_prefix="predict"
+        results = trainer.predict(test_dataset,  metric_key_prefix="predict"
 
         )
 
-        metrics = xsim_results.metrics
 
-
-        trainer.log_metrics("predict", metrics)
-        trainer.save_metrics("predict", metrics)
+        trainer.log_metrics("predict", results)
+        trainer.save_metrics("predict", results)
 
 
     return results

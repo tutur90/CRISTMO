@@ -41,8 +41,7 @@ schema = pl.Schema({
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Prepare data for analysis")
     parser.add_argument("--input", type=str, default="data/futures/raw", help="Path to the input data file")
-    parser.add_argument("--output", type=str, default="data/futures/processed/", help="Path to the output data file")
-    parser.add_argument("--dataset", type=str, default="data/futures/dataset/", help="List of symbols to process (default: all)")
+    parser.add_argument("--output", type=str, default="data/futures/dataset/", help="Path to the output data file")
     args = parser.parse_args()
     
     input_path = pathlib.Path(args.input)
@@ -132,29 +131,3 @@ if __name__ == "__main__":
     else:
         logger.info(f"Output directory {output_path} already exists and is not empty. Skipping processing.")
         
-    if args.dataset:
-        print(f"Processing specified datasets: {args.dataset}")
-        logger.info(f"Processed specified datasets: {args.dataset}")
-        
-        dataset_paths = pathlib.Path(args.dataset)
-
-        df = pl.scan_parquet(str(output_path / "train" / "*.parquet"))
-        
-        # print(df.filter(pl.col("close").is_null()).collect())
-
-        print(f"Min date: {df.select(['time']).min().collect()}")
-        print(f"Max date: {df.select(['time']).max().collect()}")
-
-        if df.filter(pl.col("close").is_null()).collect().height > 0:
-            logger.error("There are missing close prices in the training set.")
-            print(df.filter(pl.col("close").is_null()).collect())
-            exit(1)
-        
-
-        df.sink_ipc(str(dataset_paths /  "train.feather"), mkdir=True)
-
-        df = pl.scan_parquet(str(output_path / "val" / "*.parquet"))
-        df.sink_ipc(str(dataset_paths /  "val.feather"), mkdir=True)
-
-        df = pl.scan_parquet(str(output_path / "test" / "*.parquet"))
-        df.sink_ipc(str(dataset_paths /  "test.feather"), mkdir=True)

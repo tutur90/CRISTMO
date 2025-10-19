@@ -7,4 +7,5 @@ torch
 pyyaml
 polars #polars-lts-cpu
 wandb
-jsonargparse
+transformers
+accelerate

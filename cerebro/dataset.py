@@ -307,9 +307,9 @@ class CryptoDataset(Dataset):
         
         # Zero-copy conversion to torch tensors
         return {
-            "src": torch.from_numpy(src_data.copy()),  # Copy needed if fp16->fp32 conversion
-            "tgt": torch.from_numpy(tgt_transformed),
-            "symbol": torch.tensor(symbol_idx, dtype=torch.long)
+            "sources": torch.from_numpy(src_data.copy()),  # Copy needed if fp16->fp32 conversion
+            "labels": torch.from_numpy(tgt_transformed),
+            "symbols": torch.tensor(symbol_idx, dtype=torch.long)
         }
 
     def get_metadata(self, index: int) -> dict:
@@ -426,7 +426,7 @@ if __name__ == "__main__":
     # Test with different memory settings
     print("\n1. Testing with FP16 (50% memory savings)...")
     dataset_fp16 = CryptoDataset(
-        data_path="data/futures/datasets/",
+        data_path="data/futures/dataset/",
         split="train",
         symbols=["BTCUSDT", "ETHUSDT", "BNBUSDT", "XRPUSDT", "ADAUSDT"],
         src_length=24,
@@ -456,9 +456,12 @@ if __name__ == "__main__":
     print("\n" + "="*70)
     print("Testing single sample...")
     sample = dataset[0]
-    print(f"Source shape: {sample['src'].shape}, dtype: {sample['src'].dtype}")
-    print(f"Target shape: {sample['tgt'].shape}, dtype: {sample['tgt'].dtype}")
-    print(f"Symbol index: {sample['symbol']}")
+    for key, value in sample.items():
+        print(f"{key}: shape={value.shape}, dtype={value.dtype}")
+    
+    # print(f"Source shape: {sample['src'].shape}, dtype: {sample['src'].dtype}")
+    # print(f"Target shape: {sample['tgt'].shape}, dtype: {sample['tgt'].dtype}")
+    # print(f"Symbol index: {sample['symbol']}")
     
     # Benchmark
     print("\n" + "="*70)

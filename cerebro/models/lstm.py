@@ -11,8 +11,8 @@ class FeatureExtractor(nn.Module):
         input_dim: int, 
         hidden_dim: int, 
         seg_length: int, 
-        conv_kernel: Optional[int] = 3, 
-        pool_kernel: Optional[int] = 2
+        conv_kernel: Optional[int] = 5,
+        pool_kernel: Optional[int] = 1
     ):
         super().__init__()
         
@@ -28,7 +28,7 @@ class FeatureExtractor(nn.Module):
         self.pool = nn.AvgPool1d(
             kernel_size=pool_kernel, 
             stride=pool_kernel
-        ) if pool_kernel else nn.Identity()
+        ) if pool_kernel > 1 else nn.Identity()
         
         if pool_kernel and seg_length % pool_kernel != 0:
             raise ValueError(f"seg_length ({seg_length}) must be divisible by pool_kernel ({pool_kernel})")
@@ -116,8 +116,8 @@ class LSTMModel(nn.Module):
         output_dim: int = 3, 
         seg_length: int = 60, 
         num_layers: int = 2,
-        conv_kernel: int = 3,
-        pool_kernel: int = 2,
+        conv_kernel: int = 5,
+        pool_kernel: int = 1,
         dropout: float = 0.0,
         num_symbols: int = 100,
         loss_fn: nn.Module = None,
@@ -172,9 +172,9 @@ class LSTMModel(nn.Module):
 
     def forward(
         self, 
-        src: torch.Tensor, 
-        tgt: Optional[torch.Tensor] = None, 
-        symbol: Optional[torch.Tensor] = None
+        sources: torch.Tensor,
+        labels: Optional[torch.Tensor] = None,
+        symbols: Optional[torch.Tensor] = None
     ) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
         """
         Args:
@@ -186,17 +186,17 @@ class LSTMModel(nn.Module):
             - predictions: Shape (B, 1, output_dim)
             - loss: Scalar loss value (None if tgt is not provided)
         """
-        B, T, C = src.shape
+        B, T, C = sources.shape
 
         # Normalize input
-        src = self.rev_in(src, mode='norm')
+        src = self.rev_in(sources, mode='norm')
         
         # Extract features
         src = self.feature_extractor(src)  # (B, num_segments, hidden_dim)
 
         # Initialize hidden states with symbol embedding if provided
-        if symbol is not None:
-            h0 = self.symbol_emb(symbol).unsqueeze(0).repeat(self.num_layers, 1, 1)
+        if symbols is not None:
+            h0 = self.symbol_emb(symbols).unsqueeze(0).repeat(self.num_layers, 1, 1)
         else:
             h0 = torch.zeros(self.num_layers, B, self.hidden_dim, device=src.device)
         
@@ -213,11 +213,11 @@ class LSTMModel(nn.Module):
         
         # Calculate loss if target is provided
         loss = None
-        if tgt is not None:
+        if labels is not None:
             # Handle different target shapes
             # if tgt.dim() == 2:
             #     tgt = tgt.unsqueeze(1)  # (B, output_dim) -> (B, 1, output_dim)
-            loss = self.loss_fn(x, tgt) * 1e6
+            loss = self.loss_fn(x, labels) * 1e5
 
         return {"pred": x, "loss": loss}
 
