@@ -1,30 +1,27 @@
-# Experiment Configuration
 seed: 42
 
-# Logging Configuration
 logger:
-  save_dir: logs/lstm-baseline-m
-  name: lstm-baseline-m
+  save_dir: logs
+  name: lstm-baseline-s
   project: cerebro
-  entity: null  # your wandb username/team (optional)
-  tags:
+  entity: null  # your wandb username/team (optional, uses default if null)
+  tags:  # optional tags for organization
     - lstm
     - baseline
-    - futures
-  notes: "LSTM baseline experiment with 128 hidden dim, 2 layers"
+  notes: "LSTM baseline experiment with 64 hidden dim"  # optional experiment description
 
-# Data Configuration
+
 data:
   data_path: data/futures/dataset/
   src_length: 24
   tgt_length: 1
   seg_length: &seg_length 60
-  batch_size: 512
-  num_workers: 4  # Increased for faster data loading (adjust based on CPU cores)
-  pin_memory: true  # Faster data transfer to GPU
-  persistent_workers: true  # Keep workers alive between epochs
+  batch_size: 2048
+  num_workers: 16
+  symbols: ["BTCUSDT", "ETHUSDT", "BNBUSDT", "XRPUSDT", "SUIUSDT", "SOLUSDT", "ADAUSDT", "DOGEUSDT", "LTCUSDT", "DOTUSDT"]
+  tgt_symbol: "BTCUSDT"
+  start_date: "2020-01-01"
 
-# Model Architecture
 model:
   type: lstm
   input_dim: 4
@@ -32,100 +29,14 @@ model:
   output_dim: 3
   seg_length: *seg_length
   num_layers: 2
-  dropout: 0.1  # Add dropout for regularization
-  bidirectional: false  # Set to true for bidirectional LSTM if supported
+  lr: 1.e-3
+  # weight_decay: 0.001
+  scheduler:
+    type: ReduceLROnPlateau
+    factor: 0.5
+    patience: 3
 
-# Optimizer Configuration
-optimizer:
-  type: adamw  # AdamW generally works better than Adam
-  lr: 1.0e-3
-  weight_decay: 1.0e-4  # L2 regularization
-  betas: [0.9, 0.999]
-  eps: 1.0e-8
-
-# Learning Rate Scheduler
-scheduler:
-  type: plateau  # ReduceLROnPlateau
-  mode: min
-  factor: 0.5
-  patience: 3
-  min_lr: 1.0e-6
-  threshold: 1.0e-4
-  verbose: true
-
-# Training Configuration
 trainer:
-  max_epochs: 100  # Increased from 8, early stopping will handle convergence
-  gradient_clip_val: 1.0  # Prevent exploding gradients
-  gradient_clip_algorithm: norm
-  accumulate_grad_batches: 1  # Increase for effective larger batch size
-  precision: 32  # Use 16 for mixed precision training (faster on modern GPUs)
+  max_epochs: 5
+  eval_every_n_steps: 500
   log_every_n_steps: 200
-  val_check_interval: 1.0  # Validate every epoch (or use 0.5 for twice per epoch)
-  enable_progress_bar: true
-  enable_model_summary: true
-  deterministic: true  # For reproducibility
-  benchmark: false  # Set to true for potential speedup if input size is fixed
-
-# Callbacks Configuration
-callbacks:
-  # Model Checkpointing
-  checkpoint:
-    monitor: val/loss
-    mode: min
-    save_top_k: 3  # Keep best 3 models
-    save_last: true  # Always save last checkpoint
-    filename: 'epoch={epoch:02d}-val_loss={val/loss:.4f}'
-    auto_insert_metric_name: false
-    save_weights_only: false
-    every_n_epochs: 1
-  
-  # Early Stopping
-  early_stopping:
-    enabled: true
-    monitor: val/loss
-    mode: min
-    patience: 10  # Stop if no improvement for 10 epochs
-    min_delta: 1.0e-5
-    verbose: true
-    strict: true
-  
-  # Learning Rate Monitoring
-  lr_monitor:
-    logging_interval: epoch
-
-# Evaluation Configuration
-evaluation:
-  test_after_training: true
-  save_predictions: false  # Set to true to save predictions
-  metrics:
-    - mse
-    - mae
-    - rmse
-    - relative_mse
-
-# Resource Configuration
-resources:
-  accelerator: auto  # auto, gpu, cpu, tpu
-  devices: auto  # auto, or specific device ids [0, 1]
-  strategy: auto  # auto, ddp, ddp_spawn for multi-GPU
-  sync_batchnorm: false  # Set true for multi-GPU training
-
-# Advanced Training Options
-training:
-  # Gradient accumulation for simulating larger batch sizes
-  # effective_batch_size = batch_size * accumulate_grad_batches * num_gpus
-  effective_batch_size: 512
-  
-  # Mixed precision training (requires precision: 16)
-  use_amp: false
-  
-  # Debugging
-  fast_dev_run: false  # Run 1 batch of train/val/test for debugging
-  overfit_batches: 0.0  # Overfit on subset for debugging (0.0 = disabled)
-  limit_train_batches: 1.0  # Fraction of training data to use
-  limit_val_batches: 1.0  # Fraction of validation data to use
-  limit_test_batches: 1.0  # Fraction of test data to use
-  
-  # Profiling
-  profiler: null  # null, simple, advanced, pytorch

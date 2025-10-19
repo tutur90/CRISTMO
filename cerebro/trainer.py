@@ -88,7 +88,10 @@ class Trainer:
             
             # Forward pass
             self.optimizer.zero_grad()
-            outputs, loss = self.model(**batch)
+            outputs = self.model(**batch)
+            
+            
+            loss = outputs["loss"]
             
             # Backward pass
             loss.backward()
