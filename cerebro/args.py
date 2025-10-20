@@ -51,8 +51,13 @@ class ModelArguments:
     pool_kernel: Optional[int] = field(
         default=1, metadata={"help": "The pooling kernel size."}
     )
-
+    loss_function: str = field(
+        default="basic_inv", metadata={"help": "The loss function to use."} 
+    )
     
+    pretrained_model: Optional[str] = field(
+        default=None, metadata={"help": "Path to a pretrained model to load."}
+    )
 
 
 @dataclass
@@ -125,6 +130,10 @@ class DataTrainingArguments:
         },
     )
     
+    wandb_project_name: str = field(
+        default="CRISTMO", metadata={"help": "Weights & Biases project name for logging."}
+    )
+
     def __post_init__(self):
         if self.data_path is None:
             raise ValueError("You must specify a data_path for the dataset.")

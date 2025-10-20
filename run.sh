@@ -1,1 +1,1 @@
-accelerate launch --mixed-precision=no --dynamo-backend=no --num_processes=1 --num_machines=1 train.py --config configs/training/lstm.yaml
+accelerate launch --mixed-precision=fp16 --dynamo-backend=no --num_processes=1 --num_machines=1 train.py --config configs/training/lstm.yaml

@@ -9,11 +9,16 @@ from transformers.trainer_utils import get_last_checkpoint
 from transformers import Trainer, TrainingArguments, HfArgumentParser, set_seed
 
 from cerebro.args import DataTrainingArguments, ModelArguments
-from cerebro.loss import RelativeMSELoss
+from cerebro.loss import RelativeMSELoss, BasicInvLoss
 from cerebro.models import model
 from cerebro.models.lstm import LSTMModel
 from cerebro.models.transformer import TransformerModel
-from cerebro.dataset import CryptoDataset   
+from cerebro.dataset import CryptoDataset  
+import torch 
+from safetensors.torch import load_file as safe_open
+import os
+
+
 
 
 
@@ -40,6 +45,8 @@ def main():
         
     else:
         model_args, data_args, training_args = parser.parse_args_into_dataclasses()
+        
+    os.environ["WANDB_PROJECT"]=data_args.wandb_project_name
 
     if data_args.total_batch_size is not None:
         training_args.gradient_accumulation_steps = data_args.total_batch_size // (training_args.per_device_train_batch_size * int(os.environ.get("WORLD_SIZE", 1))) + 1
@@ -96,18 +103,28 @@ def main():
     if training_args.do_eval:
         eval_dataset = CryptoDataset(**data_args.__dict__, **model_args.__dict__, split="val")
 
+    if model_args.loss_function == "relative_mse":
 
-    
+        loss_fn = RelativeMSELoss()
+
+    elif model_args.loss_function == "basic_inv":
+        loss_fn = BasicInvLoss()
+    else:
+        raise ValueError(f"Unknown loss function: {model_args.loss_function}")
+
     if model_args.type == "lstm":
-        model = LSTMModel(**model_args.__dict__, loss_fn=RelativeMSELoss())
+        model = LSTMModel(**model_args.__dict__, loss_fn=loss_fn)
     elif model_args.type == "transformer":
         model = TransformerModel(**model_args.__dict__, loss_fn=RelativeMSELoss())
     else:
         raise ValueError(f"Unknown model type: {model_args.type}")
     
-    
-    loss_fn = RelativeMSELoss()
 
+    if model_args.pretrained_model is not None:
+        logger.info(f"Loading pretrained model from {model_args.pretrained_model}")
+        state_dict = safe_open(model_args.pretrained_model)
+        model.load_state_dict(state_dict)
+        logger.info("Pretrained model loaded successfully.")
 
     # Initialize our Trainer
     trainer = CustomTrainer(
@@ -125,7 +142,13 @@ def main():
             checkpoint = training_args.resume_from_checkpoint
         elif last_checkpoint is not None:
             checkpoint = last_checkpoint
-        train_result = trainer.train(resume_from_checkpoint=checkpoint)
+            
+        try:
+            train_result = trainer.train(resume_from_checkpoint=checkpoint)
+        except KeyboardInterrupt:
+            logger.info("Training interrupted. Saving model...")
+            trainer.save_model()  # Saves the tokenizer too for easy upload
+            sys.exit(0)
         trainer.save_model()  # Saves the tokenizer too for easy upload
 
         metrics = train_result.metrics
