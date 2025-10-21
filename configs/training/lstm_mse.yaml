@@ -2,7 +2,7 @@
 
 run_name: lstm 
 
-output_dir: checkpoints/lstm_1
+output_dir: checkpoints/lstm
 overwrite_output_dir: true
 
 wandb_project_name: "inv"
