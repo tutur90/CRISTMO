@@ -63,17 +63,24 @@ class FeatureExtractor(nn.Module):
 class RevIn(nn.Module):
     """Reversible Instance Normalization for time series."""
     
-    def __init__(self, num_features: int, eps: float = 1e-5, std_scale: bool = True):
+    def __init__(self, num_features: int, eps: float = 1e-5, scale_type: str = 'max'):
+        """
+        Args:
+            num_features: Number of features (channels) in the input tensor
+            eps: Small value to avoid division by zero
+            scale_type: Type of scaling to apply ('std' or 'minmax')
+            std_scale: Whether to apply standard deviation scaling
+        """
         super().__init__()
         self.eps = eps
         self.num_features = num_features
         self.gamma = nn.Parameter(torch.ones(1, 1, num_features))
         self.beta = nn.Parameter(torch.zeros(1, 1, num_features))
         
-        self.std = None
+        self.scale = None
         self.last = None
         
-        self.std_scale = std_scale
+        self.scale_type = scale_type
 
     def forward(self, x: torch.Tensor, mode: str = 'norm') -> torch.Tensor:
         """
@@ -95,16 +102,26 @@ class RevIn(nn.Module):
             
             x_centered = (x - self.last)
 
-            x_centered = x_centered / self.last
+            # x_centered = x_centered / self.last
 
             # print(x_centered.shape)
 
-            self.std = x_centered.abs().max(dim=1, keepdim=False).values[:, 3] + self.eps
-            
             # print(self.std.shape)
 
-            if self.std_scale:
-                x_centered = x_centered / self.std.view(B, 1, 1)
+            if self.scale_type == 'std':
+                self.scale = x_centered.std(dim=1, keepdim=False) + self.eps
+            elif self.scale_type == 'minmax':
+                self.scale = self.std
+            elif self.scale_type == 'max':
+                self.scale = x_centered.abs().max(dim=1, keepdim=False).values[:, 3] + self.eps
+            elif self.scale_type == 'none':
+                self.scale = torch.ones_like(self.std)
+            else:
+                raise ValueError(f"Unknown scale type: {self.scale_type}")
+
+            x_centered = x_centered / self.scale.view(B, 1, 1)
+
+            
             # x_centered = x_centered / self.last.view(B, 1, 1)
             return x_centered
             

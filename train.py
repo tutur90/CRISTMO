@@ -9,7 +9,7 @@ from transformers.trainer_utils import get_last_checkpoint
 from transformers import Trainer, TrainingArguments, HfArgumentParser, set_seed
 
 from cerebro.args import DataTrainingArguments, ModelArguments
-from cerebro.loss import RelativeMSELoss, BasicInvLoss
+from cerebro.loss import RelativeMSELoss, BasicInvLoss, InvLoss
 from cerebro.models import model
 from cerebro.models.lstm import LSTMModel
 from cerebro.models.transformer import TransformerModel
@@ -109,6 +109,10 @@ def main():
 
     elif model_args.loss_function == "basic_inv":
         loss_fn = BasicInvLoss()
+    elif model_args.loss_function == "inv":
+        
+        loss_fn = InvLoss()
+        
     else:
         raise ValueError(f"Unknown loss function: {model_args.loss_function}")
 
