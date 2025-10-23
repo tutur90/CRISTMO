@@ -129,6 +129,39 @@ def main():
         state_dict = safe_open(model_args.pretrained_model)
         model.load_state_dict(state_dict)
         logger.info("Pretrained model loaded successfully.")
+        
+        
+    def compute_metrics(p):
+        
+        import numpy as np
+        import matplotlib.pyplot as plt
+
+
+        plt.figure(figsize=(10, 5))
+        plt.plot(np.arange(len(p.losses)), p.losses, label="Loss")
+        plt.xlabel("Steps")
+        plt.ylabel("Loss")
+        plt.title("Training Loss")
+        plt.legend()
+        plt.savefig(os.path.join(training_args.output_dir, "training_loss.png"))
+
+        plt.close()
+
+        avg_repartition = np.mean(p.predictions, axis=0).squeeze()
+        
+        plt.figure(figsize=(10, 5))
+        plt.bar(np.arange(len(avg_repartition)), avg_repartition)
+        plt.xlabel("Grid Index")
+        plt.ylabel("Average Repartition")
+        plt.title("Average Repartition over Grid")
+        plt.savefig(os.path.join(training_args.output_dir, "avg_repartition.png"))
+        plt.close()
+        
+
+        return {
+            "loss": p.losses.mean(),
+            "avg_repartition": avg_repartition
+        }
 
     # Initialize our Trainer
     trainer = CustomTrainer(
@@ -136,6 +169,7 @@ def main():
         args=training_args,
         train_dataset=train_dataset if training_args.do_train else None,
         eval_dataset=eval_dataset if training_args.do_eval else None,
+        compute_metrics=compute_metrics,
     )
     
     

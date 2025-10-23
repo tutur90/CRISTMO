@@ -9,3 +9,4 @@ polars #polars-lts-cpu
 wandb
 transformers
 accelerate
+matplotlib
