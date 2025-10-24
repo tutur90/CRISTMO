@@ -74,16 +74,19 @@ class InvLoss(torch.nn.Module):
     def __init__(self):
         super().__init__()
 
-    def forward(self, output: torch.Tensor, target: torch.Tensor, rev_in: RevIn, leverage=1, grid_scale: float=1.0,  num_items_in_batch: int= None) -> torch.Tensor:
+    def forward(self, output: torch.Tensor, target: torch.Tensor, rev_in: RevIn, leverage=1, grid_scale: float=1.0, softmax: bool=True, num_items_in_batch: int= None) -> torch.Tensor:
         
 
         scale = rev_in.scale * grid_scale
         
         grid = torch.linspace(-1, 1, steps=output.shape[-1], device=output.device).unsqueeze(0) * scale.unsqueeze(1)   # (B, D)
         
-        inv = torch.softmax(output, dim=-1) * torch.sign(grid)
-        
-        # inv = output/output.abs().sum(dim=-1, keepdim=True) * leverage
+        if softmax:
+
+            inv = torch.softmax(output, dim=-1) * torch.sign(grid)
+
+        else:
+            inv = output/output.abs().sum(dim=-1, keepdim=True) * leverage
 
         inv = inv * taken_order * leverage
         
