@@ -160,7 +160,6 @@ def main():
 
         return {
             "loss": p.losses.mean(),
-            "avg_repartition": avg_repartition
         }
 
     # Initialize our Trainer

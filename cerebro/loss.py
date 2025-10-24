@@ -99,12 +99,12 @@ class InvLoss(torch.nn.Module):
         inv = output/output.abs().sum(dim=-1, keepdim=True) * leverage * taken_order
         
         # print("inv", inv)
-        
-        
-        pnl = inv * (ret - 1) + 1  # (B, T)
-        
-        log_pnl = torch.log(pnl.clamp(min=1e-8))    
-        
+
+
+        pnl = (inv * (ret - 1)).mean(dim=-1) + 1  # (B, T)
+
+        log_pnl = torch.log(pnl.clamp(min=1e-8))
+
         # print("log_pnl", log_pnl)
         
         # inv = output.mean(dim=-1) * (target[:, :, 2]-last.view(-1, 1)) / (last.view(-1, 1)) 
