@@ -17,6 +17,8 @@ class Loss(torch.nn.Module):
         return -pnl # minimize negative log-likelihood
 
 
+
+
 class RelativeMSELoss(torch.nn.Module):
     def __init__(self):
         super().__init__()
@@ -34,11 +36,11 @@ class RelativeMSELoss(torch.nn.Module):
         mse = torch.mean((output - target) ** 2)
 
         # Compute the relative mean squared error
-        relative_mse = mse / (torch.mean(target ** 2) + 1e-8)
+        relative_mse = mse - (torch.mean(target ** 2))
 
-        return relative_mse * 1e5
-    
-    
+        return relative_mse
+
+
 class BasicInvLoss(torch.nn.Module):
     def __init__(self):
         super().__init__()
@@ -50,14 +52,14 @@ class BasicInvLoss(torch.nn.Module):
         #     raise ValueError(f"Output shape {output.shape} does not match target shape {target.shape}")
         
         
-        ret = target[:, 2]/rev_in.last.squeeze()  # (B, T)
+        ret = target[:, 2] - rev_in.last.squeeze()  # (B, T)
         
         # print("ret", ret)
         
         inv = torch.tanh(output.mean(dim=-1).squeeze()) * leverage
         
         
-        pnl = inv * (ret - 1) + 1  # (B, T)
+        pnl = inv * (ret.exp() - 1) + 1  # (B, T)
         
         log_pnl = torch.log(pnl.clamp(min=1e-8))    
         

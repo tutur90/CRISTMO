@@ -36,6 +36,7 @@ class CryptoDataset(Dataset):
         tgt_symbol: Optional[str] = None,
         use_fp16: bool = False,  # Use float16 for 50% memory savings
         tgt_mode: str = "ohlc",  # Target mode: 'ohlc' or 'close'
+        log_scaling: bool = True,
         **kwargs
     ):
         super().__init__()
@@ -140,6 +141,9 @@ class CryptoDataset(Dataset):
         
         # Feature data as specified dtype (float16 or float32)
         self.feature_data = self.data_df.select(self.features).collect().to_numpy().astype(self.dtype)
+        
+        if not self.log_scaling:
+            np.exp(self.feature_data, out=self.feature_data)
         
         # Symbol mapping with smallest possible dtype
         if self.symbols:
