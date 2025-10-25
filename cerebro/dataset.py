@@ -49,6 +49,8 @@ class CryptoDataset(Dataset):
         self.tgt_length = tgt_length * seg_length
 
         self.tgt_mode = tgt_mode
+        
+        self.log_scaling = log_scaling
 
         if tgt_symbol is not None and split != "train":
             symbols = [tgt_symbol]
@@ -130,6 +132,8 @@ class CryptoDataset(Dataset):
         
         # Drop unnecessary columns to save memory
         df = df.select(["time", "symbol"] + self.features)
+        
+        logger.info(f"Data loaded with {df.collect().shape[0]} rows and columns: {df.collect().columns}")
 
         return df
     
@@ -140,11 +144,12 @@ class CryptoDataset(Dataset):
         logger.info("Converting to numpy arrays with optimal dtypes...")
         
         # Feature data as specified dtype (float16 or float32)
-        self.feature_data = self.data_df.select(self.features).collect().to_numpy().astype(self.dtype)
-        
-        if not self.log_scaling:
-            np.exp(self.feature_data, out=self.feature_data)
-        
+        if self.log_scaling:
+            self.feature_data = self.data_df.select(self.features).collect().to_numpy().astype(self.dtype)
+
+        else:
+            self.feature_data = self.data_df.select([pl.col(col_name).exp() for col_name in self.features]).collect().to_numpy().astype(self.dtype)
+
         # Symbol mapping with smallest possible dtype
         if self.symbols:
             symbol_to_idx = {s: i for i, s in enumerate(self.symbols)}

@@ -36,9 +36,9 @@ class RelativeMSELoss(torch.nn.Module):
         mse = torch.mean((output - target) ** 2)
 
         # Compute the relative mean squared error
-        relative_mse = mse - (torch.mean(target ** 2))
+        relative_mse = mse
 
-        return relative_mse
+        return relative_mse * 1e4  # scale factor to keep loss values manageable
 
 
 class BasicInvLoss(torch.nn.Module):
@@ -73,12 +73,13 @@ class BasicInvLoss(torch.nn.Module):
     
     
 class InvLoss(torch.nn.Module):
-    def __init__(self, leverage=1.0, grid_scale: float=1.0, softmax: bool=False, fee=0.01, **kwargs):
+    def __init__(self, leverage=1.0, grid_scale: float=1.0, softmax: bool=False, fee=0.01, log_scale: bool=False, **kwargs):
         super().__init__()
         self.leverage = leverage
         self.grid_scale = grid_scale
         self.softmax = softmax
         self.fee = fee
+        self.log_scale = log_scale
 
     def forward(self, output: torch.Tensor, target: torch.Tensor, rev_in: RevIn, num_items_in_batch: int= None) -> torch.Tensor:
 
@@ -97,8 +98,11 @@ class InvLoss(torch.nn.Module):
 
         
         grid = grid + rev_in.last.view(-1, 1)  # (B, D)
-
-        ret = target[:, 2].unsqueeze(-1)/( grid)  # (B, T)
+        
+        if self.log_scale:
+            ret = target[:, 2].unsqueeze(-1) - (grid)  # (B, T)
+        else:
+            ret = target[:, 2].unsqueeze(-1)/ (grid) 
 
 
         taken_order = (grid > target[:, 0].unsqueeze(-1).repeat(1, grid.shape[1])) * (grid < target[:, 1].unsqueeze(-1).repeat(1, grid.shape[1]))  # (B, D)
@@ -106,7 +110,10 @@ class InvLoss(torch.nn.Module):
 
         inv = inv * taken_order * self.leverage  # (B, D)
 
-        pnl = (inv * (ret - 1)).sum(dim=-1) - self.fee/100*inv.abs().sum(dim=-1) + 1  # (B, T)
+        if self.log_scale:
+            pnl = (inv * (ret.exp() - 1)).sum(dim=-1) - self.fee/100*inv.abs().sum(dim=-1) + 1  # (B, T)
+        else:
+            pnl = (inv * (ret - 1)).sum(dim=-1) - self.fee/100*inv.abs().sum(dim=-1) + 1  # (B, T)
 
         log_pnl = torch.log(pnl.clamp(min=1e-8))
 

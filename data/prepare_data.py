@@ -9,20 +9,6 @@ from typing import Union
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# init_schema = pl.Schema({
-#     "open_time": pl.Int64,
-#     "open": pl.Float32,
-#     "high": pl.Float32,
-#     "low": pl.Float32,
-#     "close": pl.Float32,
-#     "volume": pl.Float32,
-#     "close_time": pl.Int64,
-#     "quote_volume": pl.Float32,
-#     "count": pl.Int32,
-#     "taker_buy_volume": pl.Float32,
-#     "taker_buy_quote_volume": pl.Float32,
-#     "ignore": pl.Float32
-# })
 
 schema = pl.Schema({
     "open_time": pl.Datetime("ms"),
@@ -42,9 +28,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Prepare data for analysis")
     parser.add_argument("--input", type=str, default="data/futures/raw", help="Path to the input data file")
     parser.add_argument("--output", type=str, default="data/futures/dataset/", help="Path to the output data file")
-    parser.add_argument("--max_scaling", type=bool, default=True, help="Whether to apply max scaling")
-    parser.add_argument("--log_scaling", type=bool, default=True, help="Whether to apply log scaling")
-    parser.add_argument("--bias_removal", type=bool, default=True, help="Whether to apply bias removal")
+    parser.add_argument("--no-max-scaling", type=bool, default=True, help="Whether to apply max scaling")
+    parser.add_argument("--no-log-scaling", type=bool, default=True, help="Whether to apply log scaling")
+    parser.add_argument("--no-bias-removal", type=bool, default=True, help="Whether to apply bias removal")
     parser.add_argument("--eps", type=float, default=1e-8, help="Small value to avoid log(0)")
     args = parser.parse_args()
     
@@ -127,14 +113,18 @@ if __name__ == "__main__":
             
             df = df.with_row_index("idx")
             
-            # Pass to log scale
-            for col_name in ["open", "high", "low", "close", "volume", "quote_volume", "count", "taker_buy_volume", "taker_buy_quote_volume"]:
+            # # Pass to log scale
+            for col_name in ["open", "high", "low", "close", "volume",]:
                 df = df.with_columns(
-                        pl.when(pl.col(col_name) > 0)
-                        .then(pl.col(col_name).log())
-                        .otherwise((pl.col(col_name) + args.eps).log())
-                        .alias(col_name)
+                        pl.col(col_name).log().alias(col_name)
                     )
+                
+            for col_name in ["quote_volume", "count", "taker_buy_volume", "taker_buy_quote_volume"]:
+                df = df.with_columns(
+                        (pl.col(col_name) + args.eps).log().alias(col_name)
+                    )
+                
+            print(args.log_scaling, args.no_max_scaling, args.no_bias_removal)
 
             if args.max_scaling:
                 max_vals = df.filter(pl.col("time") < val_start).select([
@@ -155,37 +145,42 @@ if __name__ == "__main__":
                         (pl.col(col_name) - value).alias(col_name) # log scal: - = /
                     )
                     
-            if args.bias_removal:
-                mean_vals = df.filter(pl.col("time") < val_start).select([
-                    pl.col("open").diff().mean().alias("open_mean"),
-                    pl.col("high").diff().mean().alias("high_mean"),
-                    pl.col("low").diff().mean().alias("low_mean"),
-                    pl.col("close").diff().mean().alias("close_mean"),
-                    pl.col("volume").diff().mean().alias("volume_mean"),
-                    pl.col("quote_volume").diff().mean().alias("quote_volume_mean"),
-                    pl.col("count").diff().mean().alias("count_mean"),
-                    pl.col("taker_buy_volume").diff().mean().alias("taker_buy_volume_mean"),
-                    pl.col("taker_buy_quote_volume").diff().mean().alias("taker_buy_quote_volume_mean"),
-                ]).to_dicts()[0]
+            # if args.bias_removal:
+            #     mean_vals = df.filter(pl.col("time") < val_start).select([
+            #         pl.col("open").diff().mean().alias("open_mean"),
+            #         pl.col("high").diff().mean().alias("high_mean"),
+            #         pl.col("low").diff().mean().alias("low_mean"),
+            #         pl.col("close").diff().mean().alias("close_mean"),
+            #         pl.col("volume").diff().mean().alias("volume_mean"),
+            #         pl.col("quote_volume").diff().mean().alias("quote_volume_mean"),
+            #         pl.col("count").diff().mean().alias("count_mean"),
+            #         pl.col("taker_buy_volume").diff().mean().alias("taker_buy_volume_mean"),
+            #         pl.col("taker_buy_quote_volume").diff().mean().alias("taker_buy_quote_volume_mean"),
+            #     ]).to_dicts()[0]
                 
-                max_train_idx = df.filter(pl.col("time") < val_start)["idx"].max()
+            #     max_train_idx = df.filter(pl.col("time") < val_start)["idx"].max()
                 
-                for key, value in mean_vals.items():
-                    col_name = key.replace("_mean", "")
+            #     for key, value in mean_vals.items():
+            #         col_name = key.replace("_mean", "")
                     
-                    df = df.with_columns(
-                        pl.when(pl.col("time") < val_start)
-                        .then(pl.col(col_name) - pl.col("idx") * value)
-                        .otherwise(pl.col(col_name) - (max_train_idx * value))
-                        .alias(col_name)
-                    )
+            #         df = df.with_columns(
+            #             pl.when(pl.col("time") < val_start)
+            #             .then(pl.col(col_name) - pl.col("idx") * value)
+            #             .otherwise(pl.col(col_name) - (max_train_idx * value))
+            #             .alias(col_name)
+            #         )
                     
             if not args.log_scaling:
                 for col_name in ["open", "high", "low", "close", "volume", "quote_volume", "count", "taker_buy_volume", "taker_buy_quote_volume"]:
                     df = df.with_columns(
                         pl.col(col_name).exp().alias(col_name)
                     )
+                    
+                    
+                    
+            # print(df)
 
+            df = df.drop("idx")
 
             
             # Split data correctly
