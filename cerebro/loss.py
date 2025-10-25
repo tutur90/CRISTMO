@@ -73,17 +73,21 @@ class BasicInvLoss(torch.nn.Module):
     
     
 class InvLoss(torch.nn.Module):
-    def __init__(self):
+    def __init__(self, leverage=1.0, grid_scale: float=1.0, softmax: bool=False, fee=0.01, **kwargs):
         super().__init__()
+        self.leverage = leverage
+        self.grid_scale = grid_scale
+        self.softmax = softmax
+        self.fee = fee
 
-    def forward(self, output: torch.Tensor, target: torch.Tensor, rev_in: RevIn, leverage=1, grid_scale: float=1.0, softmax: bool=False, fee=0.01, num_items_in_batch: int= None) -> torch.Tensor:
-        
+    def forward(self, output: torch.Tensor, target: torch.Tensor, rev_in: RevIn, num_items_in_batch: int= None) -> torch.Tensor:
 
-        scale = rev_in.scale * grid_scale
-        
+
+        scale = rev_in.scale * self.grid_scale
+
         grid = torch.linspace(-1, 1, steps=output.shape[-1], device=output.device).unsqueeze(0) * scale.unsqueeze(1)   # (B, D)
-        
-        if softmax:
+
+        if self.softmax:
 
             inv = torch.softmax(output, dim=-1)
 
@@ -98,11 +102,11 @@ class InvLoss(torch.nn.Module):
 
 
         taken_order = (grid > target[:, 0].unsqueeze(-1).repeat(1, grid.shape[1])) * (grid < target[:, 1].unsqueeze(-1).repeat(1, grid.shape[1]))  # (B, D)
-        
-        
-        inv = inv * taken_order * leverage  # (B, D)
 
-        pnl = (inv * (ret - 1)).sum(dim=-1) - fee/100*inv.abs().sum(dim=-1) + 1  # (B, T)
+
+        inv = inv * taken_order * self.leverage  # (B, D)
+
+        pnl = (inv * (ret - 1)).sum(dim=-1) - self.fee/100*inv.abs().sum(dim=-1) + 1  # (B, T)
 
         log_pnl = torch.log(pnl.clamp(min=1e-8))
 

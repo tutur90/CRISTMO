@@ -103,15 +103,15 @@ def main():
     if training_args.do_eval:
         eval_dataset = CryptoDataset(**data_args.__dict__, **model_args.__dict__, split="val")
 
-    if model_args.loss_function == "relative_mse":
+    if model_args.loss_function["type"] == "relative_mse":
 
         loss_fn = RelativeMSELoss()
 
-    elif model_args.loss_function == "basic_inv":
+    elif model_args.loss_function["type"] == "basic_inv":
         loss_fn = BasicInvLoss()
-    elif model_args.loss_function == "inv":
-        
-        loss_fn = InvLoss()
+    elif model_args.loss_function["type"] == "inv":
+
+        loss_fn = InvLoss(**model_args.loss_function)
         
     else:
         raise ValueError(f"Unknown loss function: {model_args.loss_function}")
