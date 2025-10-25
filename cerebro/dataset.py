@@ -35,6 +35,7 @@ class CryptoDataset(Dataset):
         normalize: bool = False,
         tgt_symbol: Optional[str] = None,
         use_fp16: bool = False,  # Use float16 for 50% memory savings
+        tgt_mode: str = "ohlc",  # Target mode: 'ohlc' or 'close'
         **kwargs
     ):
         super().__init__()
@@ -45,7 +46,9 @@ class CryptoDataset(Dataset):
         self.seg_length = seg_length
         self.src_length = src_length * seg_length
         self.tgt_length = tgt_length * seg_length
-        
+
+        self.tgt_mode = tgt_mode
+
         if tgt_symbol is not None and split != "train":
             symbols = [tgt_symbol]
 
@@ -165,6 +168,7 @@ class CryptoDataset(Dataset):
         self.low_idx = self.features.index('low')
         self.high_idx = self.features.index('high')
         self.close_idx = self.features.index('close')
+        self.open_idx = self.features.index('open')
         
         # Clear the DataFrame to free memory
         del self.data_df
@@ -237,11 +241,29 @@ class CryptoDataset(Dataset):
         Transform target data into prediction format.
         Returns float32 for better precision in loss computation.
         """
-        result = np.array([
-            target_data[:, self.low_idx].min(),
-            target_data[:, self.high_idx].max(),
-            target_data[-1, self.close_idx]
-        ], dtype=np.float32)  # Always use float32 for targets
+        if self.tgt_mode == "ohlc":
+            # OHLC format
+            result = np.array([
+                target_data[:, self.low_idx].min(),
+                target_data[:, self.high_idx].max(),
+                target_data[-1, self.close_idx],
+                target_data[0, self.open_idx],
+            ], dtype=np.float32)  # Always use float32 for targets
+        elif self.tgt_mode == "long_short":
+            pass
+        
+            intervales = []
+            
+            for i in range(0, target_data.shape[0]):
+                
+                pass
+                
+                
+        
+
+            
+            
+
         
         return result
     

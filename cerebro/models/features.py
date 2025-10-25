@@ -126,12 +126,11 @@ class RevIn(nn.Module):
             return x_centered
             
         elif mode == 'denorm':
-            if self.std is None or self.last is None:
+            if self.scale is None or self.last is None:
                 raise ValueError("Must call in 'norm' mode before 'denorm' mode")
-            
-            if self.std_scale:
-                x = x * self.std.view(B, 1, 1)
-                
+
+            x = x * self.scale.view(B, 1, 1)
+
             # x = x * self.last.view(B, 1, 1)
             return x + self.last
             

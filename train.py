@@ -127,7 +127,11 @@ def main():
     if model_args.pretrained_model is not None:
         logger.info(f"Loading pretrained model from {model_args.pretrained_model}")
         state_dict = safe_open(model_args.pretrained_model)
-        model.load_state_dict(state_dict)
+
+        del state_dict["fc.weight"]
+        del state_dict["fc.bias"]
+
+        model.load_state_dict(state_dict, strict=False)
         logger.info("Pretrained model loaded successfully.")
         
         
