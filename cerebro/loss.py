@@ -59,7 +59,7 @@ class BasicInvLoss(torch.nn.Module):
         inv = torch.tanh(output.mean(dim=-1).squeeze()) * leverage
         
         
-        pnl = inv * (ret.exp() - 1) + 1  # (B, T)
+        pnl = inv * (ret.exp() - 1) + 1  # (B, T) 
         
         log_pnl = torch.log(pnl.clamp(min=1e-8))    
         
