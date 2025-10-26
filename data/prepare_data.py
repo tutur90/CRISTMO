@@ -32,7 +32,7 @@ if __name__ == "__main__":
     parser.add_argument("--no-max-scaling", action="store_true", help="Skip max scaling")
     parser.add_argument("--no-log-scaling", action="store_true", help="Skip log scaling")
     parser.add_argument("--no-bias-removal", action="store_true", help="Skip bias removal")
-    parser.add_argument("--eps", type=float, default=1e-8, help="Small value to avoid log(0)")
+    parser.add_argument("--eps", type=float, default=1e-20, help="Small value to avoid log(0)")
     args = parser.parse_args()
     
     input_path = pathlib.Path(args.input)
@@ -115,37 +115,44 @@ if __name__ == "__main__":
             # Apply log scaling
             if not args.no_log_scaling:
                 logger.info(f"Applying log scaling to {dir.name}")
-                for col_name in ["open", "high", "low", "close", "volume"]:
+                for col_name in ["open", "high", "low", "close"]:
                     df = df.with_columns(
                         pl.col(col_name).log().alias(col_name)
                     )
                     
-                for col_name in ["quote_volume", "count", "taker_buy_volume", "taker_buy_quote_volume"]:
+                for col_name in ["volume", "quote_volume", "count", "taker_buy_volume", "taker_buy_quote_volume"]:
                     df = df.with_columns(
                         (pl.col(col_name) + args.eps).log().alias(col_name)
                     )
 
-            # Apply max scaling
-            if not args.no_max_scaling:
-                logger.info(f"Applying max scaling to {dir.name}")
-                max_vals = df.filter(pl.col("time") < val_start).select([
-                    pl.col("open").max().alias("open_max"),
-                    pl.col("high").max().alias("high_max"),
-                    pl.col("low").max().alias("low_max"),
-                    pl.col("close").max().alias("close_max"),
-                    pl.col("volume").max().alias("volume_max"),
-                    pl.col("quote_volume").max().alias("quote_volume_max"),
-                    pl.col("count").max().alias("count_max"),
-                    pl.col("taker_buy_volume").max().alias("taker_buy_volume_max"),
-                    pl.col("taker_buy_quote_volume").max().alias("taker_buy_quote_volume_max"),
-                ]).to_dicts()[0]
+            # # Apply max scaling
+            # if not args.no_max_scaling:
+            #     logger.info(f"Applying max scaling to {dir.name}")
+            #     max_vals = df.filter(pl.col("time") < val_start).select([
+            #         pl.col("open").max().alias("open_max"),
+            #         pl.col("high").max().alias("high_max"),
+            #         pl.col("low").max().alias("low_max"),
+            #         pl.col("close").max().alias("close_max"),
+            #         pl.col("volume").max().alias("volume_max"),
+            #         pl.col("quote_volume").max().alias("quote_volume_max"),
+            #         pl.col("count").max().alias("count_max"),
+            #         pl.col("taker_buy_volume").max().alias("taker_buy_volume_max"),
+            #         pl.col("taker_buy_quote_volume").max().alias("taker_buy_quote_volume_max"),
+            #     ]).to_dicts()[0]
                 
-                for key, value in max_vals.items():
-                    col_name = key.replace("_max", "")
-                    df = df.with_columns(
-                        (pl.col(col_name) - value).alias(col_name)  # log scale: - = /
-                    )
-            
+            #     for key, value in max_vals.items():
+            #         col_name = key.replace("_max", "")
+            #         if args.no_log_scaling:
+            #             df = df.with_columns(
+            #                 (pl.col(col_name) / value).alias(col_name)
+            #             )
+            #         else:
+            #             df = df.with_columns(
+            #             (pl.col(col_name) - value).alias(col_name)  # log scale: - = /
+            #         )
+
+            print(df.drop_nans())
+
             # Apply bias removal
             if not args.no_bias_removal:
                 logger.info(f"Applying bias removal to {dir.name}")
@@ -161,7 +168,11 @@ if __name__ == "__main__":
                     pl.col("taker_buy_quote_volume").diff().mean().alias("taker_buy_quote_volume_mean"),
                 ]).to_dicts()[0]
                 
+                print("mean_vals", mean_vals)
+                
                 max_train_idx = df.filter(pl.col("time") < val_start)["idx"].max()
+                
+                
                 
                 for key, value in mean_vals.items():
                     col_name = key.replace("_mean", "")
@@ -172,7 +183,7 @@ if __name__ == "__main__":
                         .otherwise(pl.col(col_name) - (max_train_idx * value))
                         .alias(col_name)
                     )
-
+                    
             df = df.drop("idx")
             
             # Save split datasets

@@ -36,7 +36,7 @@ class CryptoDataset(Dataset):
         tgt_symbol: Optional[str] = None,
         use_fp16: bool = False,  # Use float16 for 50% memory savings
         tgt_mode: str = "ohlc",  # Target mode: 'ohlc' or 'close'
-        log_scaling: bool = True,
+        log_scaling: bool = False,
         **kwargs
     ):
         super().__init__()
