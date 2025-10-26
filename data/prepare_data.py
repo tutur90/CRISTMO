@@ -26,22 +26,24 @@ schema = pl.Schema({
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Prepare data for analysis")
-    parser.add_argument("--input", type=str, default="data/futures/raw", help="Path to the input data file")
-    parser.add_argument("--output", type=str, default="data/futures/dataset/", help="Path to the output data file")
-    parser.add_argument("--no-max-scaling", type=bool, default=True, help="Whether to apply max scaling")
-    parser.add_argument("--no-log-scaling", type=bool, default=True, help="Whether to apply log scaling")
-    parser.add_argument("--no-bias-removal", type=bool, default=True, help="Whether to apply bias removal")
+    parser.add_argument("--input", type=str, default="data/futures/raw", help="Path to the input data directory")
+    parser.add_argument("--output", type=str, default="data/futures/dataset/", help="Path to the output data directory")
+    parser.add_argument("--no-overwrite", action="store_true", help="Skip processing if output directory exists and is not empty")
+    parser.add_argument("--no-max-scaling", action="store_true", help="Skip max scaling")
+    parser.add_argument("--no-log-scaling", action="store_true", help="Skip log scaling")
+    parser.add_argument("--no-bias-removal", action="store_true", help="Skip bias removal")
     parser.add_argument("--eps", type=float, default=1e-8, help="Small value to avoid log(0)")
     args = parser.parse_args()
     
     input_path = pathlib.Path(args.input)
     output_path = pathlib.Path(args.output)
     
-    if not output_path.exists() or not any(output_path.iterdir()):
+    # Check if we should process data
+    if not output_path.exists() or not any(output_path.iterdir()) or not args.no_overwrite:
         logger.info(f"Processing data from {input_path} to {output_path}")
         
         if not input_path.exists():
-            logger.error(f"Input file {input_path} does not exist.")
+            logger.error(f"Input directory {input_path} does not exist.")
             exit(1)
     
         for dir in input_path.iterdir():
@@ -54,12 +56,13 @@ if __name__ == "__main__":
                 'quote_volume', 'count', 'taker_buy_volume', 'taker_buy_quote_volume', 'ignore']
             
             # Read all CSVs in directory
-            df = pl.read_csv(str(dir / "*.csv"),  has_header=False, new_columns=col).filter(pl.col("open_time").ne("open_time"))
+            df = pl.read_csv(
+                str(dir / "*.csv"), 
+                has_header=False, 
+                new_columns=col
+            ).filter(pl.col("open_time").ne("open_time"))
             
-            
-
-            df = df.filter(pl.col("open_time").ne("open_time"))
-            
+            # Cast columns to appropriate types
             df = df.select(
                 pl.col("open_time").cast(pl.Int64).alias("time"),
                 pl.col("open").cast(pl.Float32),
@@ -73,37 +76,33 @@ if __name__ == "__main__":
                 pl.col("taker_buy_quote_volume").cast(pl.Float32),
             )
             
+            # Convert timestamp and add symbol
             df = df.with_columns(
                 pl.from_epoch(pl.col("time"), "ms").alias("time"),
                 pl.lit(dir.name).alias("symbol")
             )
 
+            # Clean data
             df = df.unique().drop_nulls().drop_nans()
-            
-            
             df = df.sort("time")
 
+            # Check for data quality issues
             df = df.with_columns(
                 pl.col("time").diff().shift(-1).alias("time_diff")
             )
-
-
-
 
             if df["time_diff"][1:].min() < pd.Timedelta("1min"):
                 logger.warning(f"Duplicate timestamps found in {dir.name}")
 
             if df["time_diff"].max() > pd.Timedelta("1min"):
                 logger.warning(f"Missing timestamps found in {dir.name}")
-                logger.warning(f"Time differences: {df["time_diff"].unique().sort()}")
-                logger.warning(f"Missing timestamps at: {df.filter(pl.col('time').diff().shift(-1).gt(pd.Timedelta('1min')))}")
+                logger.warning(f"Time differences: {df['time_diff'].unique().sort()}")
+                missing = df.filter(pl.col('time').diff().shift(-1).gt(pd.Timedelta('1min')))
+                logger.warning(f"Missing timestamps at: {missing}")
 
-            
-            # df = df.join(pl.DataFrame({"time": pd.date_range(start=df["time"].min(), end=df["time"].max(), freq="1min", unit="ms")}), on="time", how="right").sort("time")
-            
-            
             df = df.drop("time_diff")
             
+            # Define train/val/test splits
             test_period = pd.DateOffset(months=1)
             val_period = pd.DateOffset(months=1)
 
@@ -113,20 +112,22 @@ if __name__ == "__main__":
             
             df = df.with_row_index("idx")
             
-            # # Pass to log scale
-            for col_name in ["open", "high", "low", "close", "volume",]:
-                df = df.with_columns(
+            # Apply log scaling
+            if not args.no_log_scaling:
+                logger.info(f"Applying log scaling to {dir.name}")
+                for col_name in ["open", "high", "low", "close", "volume"]:
+                    df = df.with_columns(
                         pl.col(col_name).log().alias(col_name)
                     )
-                
-            for col_name in ["quote_volume", "count", "taker_buy_volume", "taker_buy_quote_volume"]:
-                df = df.with_columns(
+                    
+                for col_name in ["quote_volume", "count", "taker_buy_volume", "taker_buy_quote_volume"]:
+                    df = df.with_columns(
                         (pl.col(col_name) + args.eps).log().alias(col_name)
                     )
-                
-            print(args.log_scaling, args.no_max_scaling, args.no_bias_removal)
 
-            if args.max_scaling:
+            # Apply max scaling
+            if not args.no_max_scaling:
+                logger.info(f"Applying max scaling to {dir.name}")
                 max_vals = df.filter(pl.col("time") < val_start).select([
                     pl.col("open").max().alias("open_max"),
                     pl.col("high").max().alias("high_max"),
@@ -142,53 +143,53 @@ if __name__ == "__main__":
                 for key, value in max_vals.items():
                     col_name = key.replace("_max", "")
                     df = df.with_columns(
-                        (pl.col(col_name) - value).alias(col_name) # log scal: - = /
+                        (pl.col(col_name) - value).alias(col_name)  # log scale: - = /
                     )
-                    
-            # if args.bias_removal:
-            #     mean_vals = df.filter(pl.col("time") < val_start).select([
-            #         pl.col("open").diff().mean().alias("open_mean"),
-            #         pl.col("high").diff().mean().alias("high_mean"),
-            #         pl.col("low").diff().mean().alias("low_mean"),
-            #         pl.col("close").diff().mean().alias("close_mean"),
-            #         pl.col("volume").diff().mean().alias("volume_mean"),
-            #         pl.col("quote_volume").diff().mean().alias("quote_volume_mean"),
-            #         pl.col("count").diff().mean().alias("count_mean"),
-            #         pl.col("taker_buy_volume").diff().mean().alias("taker_buy_volume_mean"),
-            #         pl.col("taker_buy_quote_volume").diff().mean().alias("taker_buy_quote_volume_mean"),
-            #     ]).to_dicts()[0]
+            
+            # Apply bias removal
+            if not args.no_bias_removal:
+                logger.info(f"Applying bias removal to {dir.name}")
+                mean_vals = df.filter(pl.col("time") < val_start).select([
+                    pl.col("open").diff().mean().alias("open_mean"),
+                    pl.col("high").diff().mean().alias("high_mean"),
+                    pl.col("low").diff().mean().alias("low_mean"),
+                    pl.col("close").diff().mean().alias("close_mean"),
+                    pl.col("volume").diff().mean().alias("volume_mean"),
+                    pl.col("quote_volume").diff().mean().alias("quote_volume_mean"),
+                    pl.col("count").diff().mean().alias("count_mean"),
+                    pl.col("taker_buy_volume").diff().mean().alias("taker_buy_volume_mean"),
+                    pl.col("taker_buy_quote_volume").diff().mean().alias("taker_buy_quote_volume_mean"),
+                ]).to_dicts()[0]
                 
-            #     max_train_idx = df.filter(pl.col("time") < val_start)["idx"].max()
+                max_train_idx = df.filter(pl.col("time") < val_start)["idx"].max()
                 
-            #     for key, value in mean_vals.items():
-            #         col_name = key.replace("_mean", "")
+                for key, value in mean_vals.items():
+                    col_name = key.replace("_mean", "")
                     
-            #         df = df.with_columns(
-            #             pl.when(pl.col("time") < val_start)
-            #             .then(pl.col(col_name) - pl.col("idx") * value)
-            #             .otherwise(pl.col(col_name) - (max_train_idx * value))
-            #             .alias(col_name)
-            #         )
-                    
-            if not args.log_scaling:
-                for col_name in ["open", "high", "low", "close", "volume", "quote_volume", "count", "taker_buy_volume", "taker_buy_quote_volume"]:
                     df = df.with_columns(
-                        pl.col(col_name).exp().alias(col_name)
+                        pl.when(pl.col("time") < val_start)
+                        .then(pl.col(col_name) - pl.col("idx") * value)
+                        .otherwise(pl.col(col_name) - (max_train_idx * value))
+                        .alias(col_name)
                     )
-                    
-                    
-                    
-            # print(df)
 
             df = df.drop("idx")
-
             
-            # Split data correctly
-            df.filter(pl.col("time") >= test_start).write_parquet(output_path / "test" / f"{dir.name}.parquet", mkdir=True)
-            df.filter((pl.col("time") >= val_start) & (pl.col("time") < test_start)).write_parquet(output_path / "val" / f"{dir.name}.parquet", mkdir=True)
-            df.filter(pl.col("time") < val_start).write_parquet(output_path / "train" / f"{dir.name}.parquet", mkdir=True)
+            # Save split datasets
+            df.filter(pl.col("time") >= test_start).write_parquet(
+                output_path / "test" / f"{dir.name}.parquet", 
+                mkdir=True
+            )
+            df.filter((pl.col("time") >= val_start) & (pl.col("time") < test_start)).write_parquet(
+                output_path / "val" / f"{dir.name}.parquet", 
+                mkdir=True
+            )
+            df.filter(pl.col("time") < val_start).write_parquet(
+                output_path / "train" / f"{dir.name}.parquet", 
+                mkdir=True
+            )
             
-            logger.info(f"Saved {dir.name}")
+            logger.info(f"Saved {dir.name} to train/val/test splits")
     else:
         logger.info(f"Output directory {output_path} already exists and is not empty. Skipping processing.")
-        
+        logger.info(f"Use --no-overwrite=False or delete the output directory to reprocess.")
