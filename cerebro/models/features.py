@@ -94,19 +94,8 @@ class RevIn(nn.Module):
         
         if mode == 'norm':
             # Use close price (index 3) for normalization
-            # self.std = x[:, :, 3].std(dim=1, keepdim=False) + self.eps
-            
-            
-            
             self.last = x[:, -1, 3].view(B, 1, 1)
-            
             x_centered = (x - self.last)
-
-            # x_centered = x_centered / self.last
-
-            # print(x_centered.shape)
-
-            # print(self.std.shape)
 
             if self.scale_type == 'std':
                 self.scale = x_centered.std(dim=1, keepdim=False) + self.eps
@@ -120,9 +109,6 @@ class RevIn(nn.Module):
                 raise ValueError(f"Unknown scale type: {self.scale_type}")
 
             x_centered = x_centered / self.scale.view(B, 1, 1)
-
-            
-            # x_centered = x_centered / self.last.view(B, 1, 1)
             return x_centered
             
         elif mode == 'denorm':
@@ -130,8 +116,6 @@ class RevIn(nn.Module):
                 raise ValueError("Must call in 'norm' mode before 'denorm' mode")
 
             x = x * self.scale.view(B, 1, 1)
-
-            # x = x * self.last.view(B, 1, 1)
             return x + self.last
             
         else:

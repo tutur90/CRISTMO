@@ -1,10 +1,6 @@
 from dataclasses import dataclass, field
 from typing import Optional
 
-from sympy import N
-
-
-
 @dataclass
 class ModelArguments:
     """
@@ -79,18 +75,7 @@ class DataTrainingArguments:
             )
         },
     )
-    
-    # src_length: Optional[int] = field(
-    #     default=24, metadata={"help": "The input sequence length."}
-    # )
-    # tgt_length: Optional[int] = field(
-    #     default=1, metadata={"help": "The target sequence length."}
-    # )
-    # seg_length: Optional[int] = field(
-    #     default=60, metadata={"help": "The segment length for the model."}
-    # )
-    
-    
+
     symbols: Optional[str] = field(
         default=None, metadata={"help": "List of symbols to include in the dataset."}
     )
@@ -140,6 +125,5 @@ class DataTrainingArguments:
         
         if self.symbols is not None:
             self.symbols = [s.strip() for s in self.symbols.split(",")]
-            
-        self.tgt_symbol = self.tgt_symbol.strip() if self.tgt_symbol is not None else None
 
+        self.tgt_symbol = self.tgt_symbol.strip() if self.tgt_symbol is not None else None

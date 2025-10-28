@@ -2,7 +2,7 @@ import math
 import torch
 import torch.nn as nn
 from cerebro.models.features import FeatureExtractor, RevIn
-        
+
 class PositionalEncoding(nn.Module):
 
     def __init__(self, d_model, dropout=0.1, max_len=24):
@@ -70,18 +70,10 @@ class TransformerModel(nn.Module):
 
 
         x = self.decoder(context, x, tgt_is_causal=False, memory_is_causal=False)
-
-        # print(x.shape)
-
         x = self.fc(x.view(B, -1)).unsqueeze(1)  # (B, 1, output_dim)
 
         loss = None
         if labels is not None:
-            # Handle different target shapes
-            # if tgt.dim() == 2:
-            #     tgt = tgt.unsqueeze(1)  # (B, output_dim) -> (B, 1, output_dim)
             loss = self.loss_fn(x, labels, self.rev_in)
 
         return {"pred": x, "loss": loss}
-
-

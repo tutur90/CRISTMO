@@ -8,7 +8,6 @@ class Loss(torch.nn.Module):
 
     def forward(self, distribution, levels, price):
         takes = (levels > price[:, 1].unsqueeze(1)) * (levels < price[:, 2].unsqueeze(1))
-        print("takes", takes)
         taken = takes * distribution
         pnl = taken * ((levels - price[:, 3].unsqueeze(1))/levels)
         pnl = pnl.sum(dim=1)
@@ -46,28 +45,10 @@ class BasicInvLoss(torch.nn.Module):
         super().__init__()
 
     def forward(self, output: torch.Tensor, target: torch.Tensor, rev_in: RevIn, leverage=1, num_items_in_batch: int= None) -> torch.Tensor:
-        
-
-        # if output.shape != target.shape:
-        #     raise ValueError(f"Output shape {output.shape} does not match target shape {target.shape}")
-        
-        
         ret = target[:, 2] - rev_in.last.squeeze()  # (B, T)
-        
-        # print("ret", ret)
-        
         inv = torch.tanh(output.mean(dim=-1).squeeze()) * leverage
-        
-        
-        pnl = inv * (ret.exp() - 1) + 1  # (B, T) 
-        
-        log_pnl = torch.log(pnl.clamp(min=1e-8))    
-        
-        # print("log_pnl", log_pnl)
-        
-        # inv = output.mean(dim=-1) * (target[:, :, 2]-last.view(-1, 1)) / (last.view(-1, 1)) 
-        # inv = -torch.log(1 + inv.clamp(min=-0.999))  # prevent log(0)
-
+        pnl = inv * (ret.exp() - 1) + 1  # (B, T)
+        log_pnl = torch.log(pnl.clamp(min=1e-8))
 
         return -log_pnl.mean() * 24 * 364  # minimize negative log-pnl
     

@@ -258,22 +258,9 @@ class CryptoDataset(Dataset):
                 target_data[-1, self.close_idx],
                 target_data[0, self.open_idx],
             ], dtype=np.float32)  # Always use float32 for targets
-        elif self.tgt_mode == "long_short":
-            pass
-        
-            intervales = []
-            
-            for i in range(0, target_data.shape[0]):
-                
-                pass
-                
-                
-        
+        else:
+            raise ValueError(f"Unsupported tgt_mode: {self.tgt_mode}")
 
-            
-            
-
-        
         return result
     
     def _estimate_memory_usage(self) -> float:
@@ -489,11 +476,7 @@ if __name__ == "__main__":
     sample = dataset[0]
     for key, value in sample.items():
         print(f"{key}: shape={value.shape}, dtype={value.dtype}")
-    
-    # print(f"Source shape: {sample['src'].shape}, dtype: {sample['src'].dtype}")
-    # print(f"Target shape: {sample['tgt'].shape}, dtype: {sample['tgt'].dtype}")
-    # print(f"Symbol index: {sample['symbol']}")
-    
+
     # Benchmark
     print("\n" + "="*70)
     print("Benchmarking DataLoader with FP16...")
