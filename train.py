@@ -1,26 +1,19 @@
 import logging
-from math import e
 import os
 import sys
 
 import transformers
-
+import torch
 from transformers.trainer_utils import get_last_checkpoint
 from transformers import Trainer, TrainingArguments, HfArgumentParser, set_seed
+from safetensors.torch import load_file as safe_open
 
 from cerebro.args import DataTrainingArguments, ModelArguments
 from cerebro.loss import RelativeMSELoss, BasicInvLoss, InvLoss
 from cerebro.models import model
 from cerebro.models.lstm import LSTMModel
 from cerebro.models.transformer import TransformerModel
-from cerebro.dataset import CryptoDataset  
-import torch 
-from safetensors.torch import load_file as safe_open
-import os
-
-
-
-
+from cerebro.dataset import CryptoDataset
 
 logger = logging.getLogger(__name__)
 

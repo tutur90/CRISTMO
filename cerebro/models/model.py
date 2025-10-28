@@ -22,11 +22,9 @@ class TimeSeriesModel(nn.Module):
         x_centered = x_centered.view(B, num_segments, self.seg_length * C)
         x_centered = self.relu(self.embedding(x_centered))
         _, (hidden, _) = self.lstm(x_centered)
-        
-        print(self.latitude.device)
         return self.fc(hidden[-1]), x_last + self.latitude
-    
-    
+
+
     
 class LSTMModel(nn.Module):
     def __init__(self, input_dim=4, hidden_dim=64, output_dim=3, num_layers=2, seg_length=60, loss_fn=nn.MSELoss(), **kwargs):
