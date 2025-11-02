@@ -112,6 +112,7 @@ if __name__ == "__main__":
             
             df = df.with_row_index("idx")
             
+            
             # Apply log scaling
             if not args.no_log_scaling:
                 logger.info(f"Applying log scaling to {dir.name}")
@@ -152,35 +153,22 @@ if __name__ == "__main__":
             #         )
 
             print(df.drop_nans())
+            max_train_idx = df.filter(pl.col("time") < val_start)["idx"].max()
 
             # Apply bias removal
             if not args.no_bias_removal:
                 logger.info(f"Applying bias removal to {dir.name}")
-                mean_vals = df.filter(pl.col("time") < val_start).select([
-                    pl.col("open").diff().mean().alias("open_mean"),
-                    pl.col("high").diff().mean().alias("high_mean"),
-                    pl.col("low").diff().mean().alias("low_mean"),
-                    pl.col("close").diff().mean().alias("close_mean"),
-                    pl.col("volume").diff().mean().alias("volume_mean"),
-                    pl.col("quote_volume").diff().mean().alias("quote_volume_mean"),
-                    pl.col("count").diff().mean().alias("count_mean"),
-                    pl.col("taker_buy_volume").diff().mean().alias("taker_buy_volume_mean"),
-                    pl.col("taker_buy_quote_volume").diff().mean().alias("taker_buy_quote_volume_mean"),
-                ]).to_dicts()[0]
-                
+                mean_vals = (df[0, "close"] - df[max_train_idx, "close"]) / max_train_idx
                 print("mean_vals", mean_vals)
                 
-                max_train_idx = df.filter(pl.col("time") < val_start)["idx"].max()
                 
-                
-                
-                for key, value in mean_vals.items():
+                for key in ["close", "open", "high", "low"]:
                     col_name = key.replace("_mean", "")
                     
                     df = df.with_columns(
                         pl.when(pl.col("time") < val_start)
-                        .then(pl.col(col_name) - pl.col("idx") * value)
-                        .otherwise(pl.col(col_name) - (max_train_idx * value))
+                        .then(pl.col(col_name) - pl.col("idx") * mean_vals)
+                        .otherwise(pl.col(col_name) - (max_train_idx * mean_vals))
                         .alias(col_name)
                     )
                     
