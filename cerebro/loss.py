@@ -71,7 +71,7 @@ class InvLoss(torch.nn.Module):
 
         if self.softmax:
 
-            inv = torch.softmax(output, dim=-1)
+            inv = torch.softmax(output, dim=-1) * -torch.sign(grid)
 
         else:
             inv = output/output.abs().sum(dim=-1, keepdim=True)
@@ -92,10 +92,12 @@ class InvLoss(torch.nn.Module):
         inv = inv * taken_order * self.leverage  # (B, D)
 
         if self.log_scale:
-            pnl = (inv * (ret.exp() - 1)).sum(dim=-1) - self.fee/100*inv.abs().sum(dim=-1) + 1  # (B, T)
+            pnl = (inv * (ret.exp() - 1)).sum(dim=-1) + 1  # (B, T)
         else:
-            pnl = (inv * (ret - 1)).sum(dim=-1) - self.fee/100*inv.abs().sum(dim=-1) + 1  # (B, T)
+            pnl = (inv * (ret - 1)).sum(dim=-1) + 1  # (B, T)
+            
+        pnl = pnl - self.fee/100*inv.abs().sum(dim=-1) # - 4* self.fee/100*inv.sum(dim=-1).abs()
 
-        log_pnl = torch.log(pnl.clamp(min=1e-8))
+        log_pnl = torch.log(pnl.clamp(min=1e-8)) 
 
         return -log_pnl.mean() * 24 * 364  # minimize negative log-pnl

@@ -38,8 +38,8 @@ loss_function:
 # === Entraînement ===
 do_eval: true
 do_train: true
-per_device_train_batch_size: 128
-per_device_eval_batch_size: 256
+per_device_train_batch_size: 256
+per_device_eval_batch_size: 512
 # total_batch_size: 64
 # gradient_accumulation_steps: 16
 
@@ -57,10 +57,10 @@ disable_tqdm: false
 ddp_find_unused_parameters: false
 logging_steps: 100
 save_total_limit: 3
-report_to: []
+report_to: ["wandb"]
 
 
-dataloader_num_workers: 16
+dataloader_num_workers: 32
 dataloader_drop_last: false
 dataloader_pin_memory : true
 

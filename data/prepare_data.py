@@ -103,8 +103,8 @@ if __name__ == "__main__":
             df = df.drop("time_diff")
             
             # Define train/val/test splits
-            test_period = pd.DateOffset(months=1)
-            val_period = pd.DateOffset(months=1)
+            test_period = pd.DateOffset(months=2)
+            val_period = pd.DateOffset(months=2)
 
             max_date = df["time"].max()
             test_start = max_date - test_period
@@ -152,14 +152,14 @@ if __name__ == "__main__":
             #             (pl.col(col_name) - value).alias(col_name)  # log scale: - = /
             #         )
 
-            print(df.drop_nans())
+            # print(df.drop_nans())
             max_train_idx = df.filter(pl.col("time") < val_start)["idx"].max()
 
             # Apply bias removal
             if not args.no_bias_removal:
                 logger.info(f"Applying bias removal to {dir.name}")
-                mean_vals = (df[0, "close"] - df[max_train_idx, "close"]) / max_train_idx
-                print("mean_vals", mean_vals)
+                mean_vals = -(df[0, "close"] - df[max_train_idx, "close"]) / max_train_idx
+                # print("mean_vals", mean_vals)
                 
                 
                 for key in ["close", "open", "high", "low"]:
