@@ -65,8 +65,6 @@ class LSTMCore(nn.Module):
         # Output projection
         # self.fc = nn.Linear(hidden_dim, output_dim)
         
-        # Symbol embedding for conditioning
-        self.symbol_emb = nn.Embedding(num_symbols, hidden_dim) if symbol_emb is None else symbol_emb
         
         self.hidden_dim = hidden_dim
         self.num_layers = num_layers
@@ -91,13 +89,13 @@ class LSTMCore(nn.Module):
         B, T, C = sources.shape
 
         # Extract features
-        src = self.feature_extractor(src)  # (B, num_segments, hidden_dim)
+        src = self.feature_extractor(sources)  # (B, num_segments, hidden_dim)
         
         # src = torch.cat([src, self.start_idx.repeat(B, 1, 1), ], dim=1)  # (B, num_segments+1, hidden_dim)
 
         # Initialize hidden states with symbol embedding if provided
         if symbols is not None:
-            h0 = self.symbol_emb(symbols).unsqueeze(0).repeat(self.num_layers, 1, 1)
+            h0 = symbols.unsqueeze(0).repeat(self.num_layers, 1, 1)
         else:
             h0 = torch.zeros(self.num_layers, B, self.hidden_dim, device=src.device)
         
@@ -189,8 +187,10 @@ class LSTMModel(nn.Module):
 
         # Normalize input
         src = self.rev_in(sources, mode='norm')
+        
+        embed_symbols = self.symbol_emb(symbols) if symbols is not None else None
 
-        x = self.lstm(src, symbols=symbols)  # (B, 1, hidden_dim)
+        x = self.lstm(src, symbols=embed_symbols)  # (B, 1, hidden_dim)
 
         # Get prediction from last hidden state
         x = self.fc(x)  # (B, 1, output_dim)

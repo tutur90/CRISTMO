@@ -54,7 +54,7 @@ class BasicInvLoss(torch.nn.Module):
     
     
 class InvLoss(torch.nn.Module):
-    def __init__(self, leverage=1.0, grid_scale: float=1.0, softmax: bool=False, fee=0.01, log_scale: bool=False, **kwargs):
+    def __init__(self, leverage=1.0, grid_scale: float=1.0, softmax: bool=False, fee=0.01, log_scale: bool=True, **kwargs):
         super().__init__()
         self.leverage = leverage
         self.grid_scale = grid_scale

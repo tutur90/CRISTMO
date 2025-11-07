@@ -6,7 +6,7 @@ output_dir: checkpoints/inv
 overwrite_output_dir: true
 
 # === Données ===
-data_path: data/futures/dataset/
+data_path: ../data/dataset/
 symbols: "BTCUSDT,ETHUSDT,BNBUSDT,XRPUSDT,SUIUSDT,SOLUSDT,ADAUSDT,DOGEUSDT,LTCUSDT,DOTUSDT"
 tgt_symbol: "BNBUSDT"
 start_date: "2020-01-01"
@@ -15,9 +15,9 @@ start_date: "2020-01-01"
 
 # === Modèle ===
 
-src_length: 24
-tgt_length: 1
-seg_length: 60
+src_length: 96
+tgt_length: 4
+seg_length: 15
 type: lstm
 input_dim: 4
 hidden_dim: 128
@@ -39,7 +39,7 @@ loss_function:
 do_eval: true
 do_train: true
 per_device_train_batch_size: 256
-per_device_eval_batch_size: 512
+per_device_eval_batch_size: 256
 # total_batch_size: 64
 # gradient_accumulation_steps: 16
 
@@ -57,7 +57,7 @@ disable_tqdm: false
 ddp_find_unused_parameters: false
 logging_steps: 100
 save_total_limit: 3
-report_to: ["wandb"]
+report_to: []
 
 
 dataloader_num_workers: 32
