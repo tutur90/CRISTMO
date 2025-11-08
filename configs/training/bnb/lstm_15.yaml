@@ -1,6 +1,6 @@
 
 
-run_name: inv 
+run_name: lstm_15
 
 output_dir: checkpoints/inv
 overwrite_output_dir: true
@@ -57,7 +57,7 @@ disable_tqdm: false
 ddp_find_unused_parameters: false
 logging_steps: 100
 save_total_limit: 3
-report_to: []
+report_to: ["wandb"]
 
 
 dataloader_num_workers: 32

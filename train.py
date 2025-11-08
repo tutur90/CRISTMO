@@ -113,6 +113,9 @@ def main():
         model = LSTMModel(**model_args.__dict__, loss_fn=loss_fn)
     elif model_args.type == "transformer":
         model = TransformerModel(**model_args.__dict__, loss_fn=RelativeMSELoss())
+    elif model_args.type == "static":
+        from cerebro.models.static import StaticModel
+        model = StaticModel(**model_args.__dict__, loss_fn=loss_fn)
     else:
         raise ValueError(f"Unknown model type: {model_args.type}")
     
