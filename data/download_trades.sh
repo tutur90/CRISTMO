@@ -6,17 +6,17 @@ set -euo pipefail
 
 # Configuration
 symbols=("BNBUSDT" "BTCUSDT" "ETHUSDT" "XRPUSDT" "SOLUSDT" "DOGEUSDT" "TRXUSDT" "ADAUSDT" "LINKUSDT" "SUIUSDT" "XLMUSDT" "AVAXUSDT" "BCHUSDT" "HYPEUSDT" "LTCUSDT" "HBARUSDT" "SHIBUSDT" "TONUSDT" "XMRUSDT" "UNIUSDT" "AAVEUSDT" "ENAUSDT" "NEARUSDT" "TAOUSDT" "OKBUSDT" "ZECUSDT" "ETCUSDT" "POLUSDT")
-intervals=("1m")
+intervals=("aggTrades")
 years=("2017" "2018" "2019" "2020" "2021" "2022" "2023" "2024" "2025")
 months=("01" "02" "03" "04" "05" "06" "07" "08" "09" "10" "11" "12")
 type="futures" # "spot" or "futures"
-max_parallel=128  # Adjust based on your system and network
+max_parallel=64  # Adjust based on your system and network
 
 # Set base URL
 if [[ "${type}" == "spot" ]]; then
-  baseurl="https://data.binance.vision/data/spot/monthly/klines"
+  baseurl="https://data.binance.vision/data/spot/monthly/aggTrades"
 elif [[ "${type}" == "futures" ]]; then
-  baseurl="https://data.binance.vision/data/futures/um/monthly/klines"
+  baseurl="https://data.binance.vision/data/futures/um/monthly/aggTrades"
 else
   echo "Error: Invalid type '${type}'. Must be 'spot' or 'futures'."
   exit 1
@@ -30,13 +30,17 @@ download_file() {
   local month=$4
   local baseurl=$5
   local type=$6
-  
-  local url="${baseurl}/${symbol}/${interval}/${symbol}-${interval}-${year}-${month}.zip"
-  local dir="data/${type}/raw/${symbol}"
   local filename="${symbol}-${interval}-${year}-${month}.zip"
+  local url="${baseurl}/${symbol}/${filename}"
+  local dir="../data/aggTrades/${type}/raw/${symbol}"
+
   
   mkdir -p "${dir}"
+
+  # echo url="${url}"
   
+  rm -f "${dir}/${filename}"
+
   # Download with wget
   if wget -q -P "${dir}" "${url}" 2>/dev/null; then
     echo "[SUCCESS] ${filename}"

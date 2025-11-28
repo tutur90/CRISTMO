@@ -26,8 +26,8 @@ schema = pl.Schema({
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Prepare data for analysis")
-    parser.add_argument("--input", type=str, default="../data/futures/raw", help="Path to the input data directory")
-    parser.add_argument("--output", type=str, default="../data/futures/dataset/", help="Path to the output data directory")
+    parser.add_argument("--input", type=str, default="../data/aggTrades/futures/raw", help="Path to the input data directory")
+    parser.add_argument("--output", type=str, default="../data/aggTrades/futures/dataset/", help="Path to the output data directory")
     parser.add_argument("--no-overwrite", action="store_true", help="Skip processing if output directory exists and is not empty")
     parser.add_argument("--no-max-scaling", action="store_true", help="Skip max scaling")
     parser.add_argument("--no-log-scaling", action="store_true", help="Skip log scaling")
@@ -52,61 +52,125 @@ if __name__ == "__main__":
                 
             logger.info(f"Processing {dir.name}")
             
-            col = ['open_time', 'open', 'high', 'low', 'close', 'volume', 'close_time', 
-                'quote_volume', 'count', 'taker_buy_volume', 'taker_buy_quote_volume', 'ignore']
+            col = ["agg_trade_id","price","quantity","first_trade_id","last_trade_id","time","is_buyer_maker"]
+            
+            print(f"Reading data from {dir}")
             
             # Read all CSVs in directory
-            df = pl.read_csv(
+            df = pl.scan_csv(
                 str(dir / "*.csv"), 
-                has_header=False, 
-                new_columns=col
-            ).filter(pl.col("open_time").ne("open_time"))
+                # has_header=True
+                has_header=False,
+                new_columns=col,
+                # schema_overrides={
+                #     "agg_trade_id": pl.String,
+                #     "price": pl.String,
+                #     "quantity": pl.String,
+                #     "first_trade_id": pl.String,
+                #     "last_trade_id": pl.String,
+                #     "time": pl.String,
+                #     "is_buyer_maker": pl.String,
+                # }
+                infer_schema=False
+            ).select([
+                pl.col("price").cast(pl.Float64, strict=False),
+                pl.col("quantity").cast(pl.Float64, strict=False),
+                pl.col("time").cast(pl.Int64, strict=False),
+                pl.col("is_buyer_maker").eq("true").cast(pl.Boolean, strict=False),
+            ]).drop_nulls(subset=["time"])
             
-            print(df.head())
+            # .filter(~pl.col("agg_trade_id").str.contains(r"[^0-9.\-+eE]"))  # contient des non-chiffres)
+            
+            print(df.head(10).collect())
+            # df = pl.read_csv(
+            #     str(dir / "*.csv"), 
+            #     has_header=False, 
+            #     new_columns=col
+            # ).filter(pl.col("open_time").ne("open_time"))
+
             
             # Cast columns to appropriate types
             df = df.select(
-                pl.col("open_time").cast(pl.Int64).alias("time"),
-                pl.col("open").cast(pl.Float32),
-                pl.col("high").cast(pl.Float32),
-                pl.col("low").cast(pl.Float32),
-                pl.col("close").cast(pl.Float32),
-                pl.col("volume").cast(pl.Float32),
-                pl.col("quote_volume").cast(pl.Float32),
-                pl.col("count").cast(pl.Float32),
-                pl.col("taker_buy_volume").cast(pl.Float32),
-                pl.col("taker_buy_quote_volume").cast(pl.Float32),
+                # pl.col("time").cast(pl.Int64).alias("time"),
+                pl.col("price").cast(pl.Float64).alias("price"),
+                pl.when(pl.col("is_buyer_maker").eq(False))
+                    .then(pl.col("quantity").cast(pl.Float64))
+                    .otherwise(0.0).alias("buy_quantity"),
+                pl.when(pl.col("is_buyer_maker").eq(True))
+                    .then(pl.col("quantity").cast(pl.Float64))
+                    .otherwise(0.0).alias("sell_quantity"), 
+                pl.from_epoch(pl.col("time"), "ms").alias("time"),
+                # pl.lit(dir.name).alias("symbol")
             )
             
-            # Convert timestamp and add symbol
-            df = df.with_columns(
-                pl.from_epoch(pl.col("time"), "ms").alias("time"),
-                pl.lit(dir.name).alias("symbol")
-            )
+            
+            print(df.head(10).collect())
+            
+            # df.sink_parquet(str(dir / "debug.parquet"))
+            
+            # df = df[:1000]
+            
+            # Aggregate to 1 second intervals
+            
+            df = df.sort("time")
+            
+            df = df.group_by_dynamic(
+                index_column="time",
+                every="1s",
+                closed="left",
+                include_boundaries=False,
+            ).agg([
+                # pl.first("time").alias("time"),
+                # pl.first("symbol").alias("symbol"),
+                pl.mean("price").alias("price"),
+                pl.sum("buy_quantity").alias("buy_quantity"),
+                pl.sum("sell_quantity").alias("sell_quantity"),
+            ])
+
+            
+            # print(df.collect())
+
+            
+            # df = df.group_by_dynamic(
+            #     index_column="time",
+            #     every="1s",
+            #     closed="left",
+            #     include_boundaries=False,
+            # ).agg([
+            #     pl.first("time").alias("time"),
+            #     pl.first("symbol").alias("symbol"),
+            #     pl.mean("price").alias("price"),
+            #     pl.sum("buy_quantity").alias("buy_quantity"),
+            #     pl.sum("sell_quantity").alias("sell_quantity"),
+            # ])
+            
+            df.sink_parquet(str(dir / "debug_agg.parquet"))
+            
+            # df = df.collect()
 
             # Clean data
-            df = df.unique().drop_nulls().drop_nans()
-            df = df.sort("time")
+            # df = df.unique().drop_nulls().drop_nans()
+            # df = df.sort("time")
 
             # Check for data quality issues
-            df = df.with_columns(
-                pl.col("time").diff().shift(-1).alias("time_diff")
-            )
+            # df = df.with_columns(
+            #     pl.col("time").diff().shift(-1).alias("time_diff")
+            # )
 
-            if df["time_diff"][1:].min() < pd.Timedelta("1min"):
-                logger.warning(f"Duplicate timestamps found in {dir.name}")
+            # if df["time_diff"][1:].min() < pd.Timedelta("1min"):
+            #     logger.warning(f"Duplicate timestamps found in {dir.name}")
 
-            if df["time_diff"].max() > pd.Timedelta("1min"):
-                logger.warning(f"Missing timestamps found in {dir.name}")
-                logger.warning(f"Time differences: {df['time_diff'].unique().sort()}")
-                missing = df.filter(pl.col('time').diff().shift(-1).gt(pd.Timedelta('1min')))
-                logger.warning(f"Missing timestamps at: {missing}")
+            # if df["time_diff"].max() > pd.Timedelta("1min"):
+            #     logger.warning(f"Missing timestamps found in {dir.name}")
+            #     logger.warning(f"Time differences: {df['time_diff'].unique().sort()}")
+            #     missing = df.filter(pl.col('time').diff().shift(-1).gt(pd.Timedelta('1min')))
+            #     logger.warning(f"Missing timestamps at: {missing}")
 
-            df = df.drop("time_diff")
+            # df = df.drop("time_diff")
             
-            # Define train/val/test splits
-            test_period = pd.DateOffset(months=2)
-            val_period = pd.DateOffset(months=2)
+            # # Define train/val/test splits
+            # test_period = pd.DateOffset(months=2)
+            # val_period = pd.DateOffset(months=2)
 
             max_date = df["time"].max()
             test_start = max_date - test_period

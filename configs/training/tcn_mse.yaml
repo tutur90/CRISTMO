@@ -1,47 +1,40 @@
 
 
-run_name: lstm_s60
+run_name: tcn 
 
-output_dir: checkpoints/lstm_s60
+output_dir: checkpoints/tcn_mse
 overwrite_output_dir: true
+
+wandb_project_name: "inv"
 
 # === Données ===
 data_path: ../data/futures/dataset/
-symbols: "BTCUSDT,ETHUSDT,BNBUSDT,XRPUSDT,SUIUSDT,SOLUSDT,ADAUSDT,DOGEUSDT,LTCUSDT,DOTUSDT"
-tgt_symbol: "BNBUSDT"
+symbols: "BTCUSDT"
+tgt_symbol: "BTCUSDT"
 start_date: "2020-01-01"
-
-# pretrained_model: checkpoints/lstm_mse/model.safetensors  ?
 
 # === Modèle ===
 
-src_length: 24
-tgt_length: 1
-seg_length: 60
-type: lstm
+src_length: 64
+tgt_length: 60
+seg_length: 1
+type: tcn
 input_dim: 4
 hidden_dim: 128
-output_dim: 8192
-num_layers: 2
-dropout: 0.0  # Add dropout for regularization
-bidirectional: false  # Set to true for bidirectional LSTM if supported
+output_dim: 4
+kernels: [2, 2, 2, 2, 2]
+dilations: [1, 2, 4, 8, 16]
 conv_kernel: 5
 pool_kernel: 1
-loss_function: 
-   type: inv
-   leverage: 1.0
-   grid_scale: 1.0
-   softmax: false
-   fee: 0.01
-
+loss_function:
+  type: relative_mse
 
 # === Entraînement ===
 do_eval: true
 do_train: true
-do_predict: true
 per_device_train_batch_size: 256
-per_device_eval_batch_size: 256
-# total_batch_size: 64
+per_device_eval_batch_size: 2048
+# total_batch_size: 8192
 # gradient_accumulation_steps: 16
 
 max_steps: 10000
@@ -49,16 +42,16 @@ save_steps: 1000
 eval_delay: 500
 eval_steps: 500
 eval_strategy: steps
-prediction_loss_only: false
+prediction_loss_only: true
 load_best_model_at_end: true
 metric_for_best_model: loss
 greater_is_better: false
 disable_tqdm: false
 
 ddp_find_unused_parameters: false
-logging_steps: 100
+logging_steps: 20
 save_total_limit: 3
-report_to: ["wandb"]
+report_to: []
 
 
 dataloader_num_workers: 7
@@ -66,17 +59,15 @@ dataloader_drop_last: false
 dataloader_pin_memory : true
 
 
-learning_rate: 4.e-4
+learning_rate: 1.e-4
 lr_scheduler_type: cosine
 warmup_steps: 500
 # max_grad_norm: 2.0
 # weight_decay: 0.0005
 
-include_for_metrics: ["loss"]
-
 
 bf16: false
-fp16: false
+fp16: true
 
 accelerator_config:
   split_batches: false

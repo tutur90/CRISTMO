@@ -6,7 +6,7 @@ output_dir: checkpoints/lstm_s60_c1
 overwrite_output_dir: true
 
 # === Données ===
-data_path: ../data/dataset/
+data_path: ../data/futures/dataset/
 symbols: "BTCUSDT,ETHUSDT,BNBUSDT,XRPUSDT,SUIUSDT,SOLUSDT,ADAUSDT,DOGEUSDT,LTCUSDT,DOTUSDT"
 tgt_symbol: "BNBUSDT"
 start_date: "2020-01-01"

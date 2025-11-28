@@ -252,12 +252,16 @@ class CryptoDataset(Dataset):
         """
         if self.tgt_mode == "ohlc":
             # OHLC format
+            
+            target_data = target_data.reshape(-1, self.seg_length, 4)
+            
             result = np.array([
-                target_data[:, self.low_idx].min(),
-                target_data[:, self.high_idx].max(),
-                target_data[-1, self.close_idx],
-                target_data[0, self.open_idx],
+                target_data[:, :, self.low_idx].min(axis=0),
+                target_data[:, :, self.high_idx].max(axis=0),
+                target_data[-1, :, self.close_idx],
+                target_data[0, :, self.open_idx],
             ], dtype=np.float32)  # Always use float32 for targets
+            result = result.T  # (T, 4)
         else:
             raise ValueError(f"Unsupported tgt_mode: {self.tgt_mode}")
 
@@ -322,6 +326,8 @@ class CryptoDataset(Dataset):
         
         # Get symbol
         symbol_idx = int(self.symbol_indices[start_idx])
+        
+
         
         # Zero-copy conversion to torch tensors
         return {

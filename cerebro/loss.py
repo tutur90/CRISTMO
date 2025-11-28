@@ -24,7 +24,7 @@ class RelativeMSELoss(torch.nn.Module):
 
     def forward(self, output: torch.Tensor, target: torch.Tensor, rev_in: RevIn, num_items_in_batch: int= None) -> torch.Tensor:
         
-        target = target.unsqueeze(1)
+        target = target
 
         output = rev_in(output, mode='denorm')
 

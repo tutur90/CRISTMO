@@ -54,6 +54,13 @@ class ModelArguments:
     pretrained_model: Optional[str] = field(
         default=None, metadata={"help": "Path to a pretrained model to load."}
     )
+    
+    kernels: Optional[str] = field(
+        default="2,2,2,2", metadata={"help": "Comma-separated list of kernel sizes for TCN layers."}
+    )
+    dilations: Optional[str] = field(
+        default="1,2,4,8", metadata={"help": "Comma-separated list of dilation factors for TCN layers."}
+    )
 
 
 @dataclass
