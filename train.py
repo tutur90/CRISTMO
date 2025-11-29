@@ -14,6 +14,7 @@ from cerebro.models import model
 from cerebro.models.lstm import LSTMModel
 from cerebro.models.transformer import TransformerModel
 from cerebro.models.tcn import TCNModel
+from cerebro.models.tcn2 import TCN2Model
 from cerebro.dataset import CryptoDataset
 
 logger = logging.getLogger(__name__)
@@ -116,6 +117,8 @@ def main():
         model = TransformerModel(**model_args.__dict__, loss_fn=RelativeMSELoss())
     elif model_args.type == "tcn":
         model = TCNModel(**model_args.__dict__, loss_fn=loss_fn)
+    elif model_args.type == "tcn2":
+        model = TCN2Model(**model_args.__dict__, loss_fn=loss_fn)
     elif model_args.type == "static":
         from cerebro.models.static import StaticModel
         model = StaticModel(**model_args.__dict__, loss_fn=loss_fn)
