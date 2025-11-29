@@ -66,7 +66,7 @@ class ResidualBlock(nn.Module):
         self.activation = nn.LeakyReLU()
         
         print(self.hidden_size)
-        self.norm = nn.LeakyReLU()
+        self.norm = nn.BatchNorm1d(self.hidden_size)
 
     def forward(self, x):
         '''One step of computation'''

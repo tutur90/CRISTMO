@@ -22,8 +22,8 @@ type: tcn
 input_dim: 4
 hidden_dim: 128
 output_dim: 4
-kernels: [5, 3]
-dilations: [1, 5]
+kernels: [5, 3, 2, 2]
+dilations: [1, 5, 15, 30]
 conv_kernel: 5
 pool_kernel: 1
 loss_function:
@@ -32,8 +32,8 @@ loss_function:
 # === Entraînement ===
 do_eval: true
 do_train: true
-per_device_train_batch_size: 256
-per_device_eval_batch_size: 2048
+per_device_train_batch_size: 2048
+per_device_eval_batch_size: 8192
 # total_batch_size: 8192
 # gradient_accumulation_steps: 16
 
