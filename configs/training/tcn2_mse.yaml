@@ -8,31 +8,31 @@ overwrite_output_dir: true
 wandb_project_name: "inv"
 
 # === Données ===
-data_path: data/futures/dataset/
-symbols: "BTCUSDT,ETHUSDT,BNBUSDT,XRPUSDT,SUIUSDT,SOLUSDT,ADAUSDT,DOGEUSDT,LTCUSDT,DOTUSDT"
+data_path: ../data/futures/dataset/
+symbols: "BTCUSDT"
 tgt_symbol: "BTCUSDT"
 start_date: "2020-01-01"
 
 # === Modèle ===
 
-src_length: 60
+src_length: 3
 tgt_length: 1
 seg_length: 60
 type: tcn2
 input_dim: 4
 hidden_dim: 128
 output_dim: 4
-num_layers: 4
-kernel_size: 3
-dropout: 0.2
+num_layers: 7
+conv_kernel: 3
+dropout: 0.0
 loss_function:
   type: relative_mse
 
 # === Entraînement ===
 do_eval: true
 do_train: true
-per_device_train_batch_size: 2048
-per_device_eval_batch_size: 8192
+per_device_train_batch_size: 512
+per_device_eval_batch_size: 4096
 
 max_steps: 10000
 save_steps: 1000

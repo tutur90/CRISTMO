@@ -7,6 +7,30 @@ from cerebro.models.features import RevIn
 from pytorch_tcn import TCN
 
 
+class DynamicTanh(nn.Module):
+    def __init__(self, normalized_shape, channels_last=False, alpha_init_value=0.5):
+        super().__init__()
+        self.normalized_shape = normalized_shape
+        self.alpha_init_value = alpha_init_value
+        self.channels_last = channels_last
+
+        self.alpha = nn.Parameter(torch.ones(1) * alpha_init_value)
+        self.weight = nn.Parameter(torch.ones(normalized_shape))
+        self.bias = nn.Parameter(torch.zeros(normalized_shape))
+
+    def forward(self, x):
+        x = torch.tanh(self.alpha * x)
+        if self.channels_last:
+            x = x * self.weight + self.bias
+        else:
+            x = x * self.weight[None, :, None] + self.bias[None, :, None]
+        return x
+
+    def extra_repr(self):
+        return f"normalized_shape={self.normalized_shape}, alpha_init_value={self.alpha_init_value}, channels_last={self.channels_last}"
+
+
+
 class TCN2Core(nn.Module):
     """TCN core using pytorch_tcn library for feature extraction."""
 
@@ -35,9 +59,11 @@ class TCN2Core(nn.Module):
 
         self.tcn = TCN(
             num_inputs=input_dim,
-            num_channels=[hidden_dim] * num_layers,
+            num_channels=[hidden_dim]*num_layers,
             kernel_size=kernel_size,
-            dropout=dropout
+            dropout=dropout,
+            activation='leaky_relu',
+            use_norm='batch_norm',
         )
 
         self.hidden_dim = hidden_dim
@@ -73,7 +99,7 @@ class TCN2Model(nn.Module):
         output_dim: int = 3,
         seg_length: int = 60,
         num_layers: int = 4,
-        kernel_size: int = 3,
+        conv_kernel: int = 3,
         dropout: float = 0.2,
         num_symbols: int = 100,
         loss_fn: nn.Module = None,
@@ -106,7 +132,7 @@ class TCN2Model(nn.Module):
             hidden_dim=hidden_dim,
             seg_length=seg_length,
             num_layers=num_layers,
-            kernel_size=kernel_size,
+            kernel_size=conv_kernel,
             dropout=dropout,
             num_symbols=num_symbols,
         )
