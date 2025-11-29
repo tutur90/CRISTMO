@@ -40,15 +40,9 @@ class TransformerModel(nn.Module):
             num_layers=num_layers, norm=norm(hidden_dim) if norm else None
         )
         
-        self.decoder = nn.TransformerDecoder(
-            nn.TransformerDecoderLayer(d_model=hidden_dim, nhead=4, dim_feedforward=hidden_dim*4, dropout=0.1, activation='relu', batch_first=True),
-            num_layers=num_layers, norm=norm(hidden_dim) if norm else None
-        )
-        
-        self.bos = nn.Parameter(torch.zeros(1, 1, hidden_dim))
         
         
-        self.fc = nn.Linear(2*hidden_dim, output_dim)
+        self.fc = nn.Linear(hidden_dim, output_dim)
 
     def forward(self, sources, labels=None, symbols=None, **kwargs):
         B, T, C = sources.shape
@@ -64,13 +58,8 @@ class TransformerModel(nn.Module):
 
         x = self.encoder(x, is_causal=False)
 
-        context = x.mean(dim=1, keepdim=True)  # (B, 1, hidden_dim)
-
-        context = torch.cat([context, self.bos.expand(B, -1, -1)], dim=1)  # (B, 2, hidden_dim)
-
-
-        x = self.decoder(context, x, tgt_is_causal=False, memory_is_causal=False)
-        x = self.fc(x.view(B, -1)).unsqueeze(1)  # (B, 1, output_dim)
+     
+        x = self.fc(x[:, -1, :]).unsqueeze(1)  # (B, 1, output_dim)
 
         loss = None
         if labels is not None:

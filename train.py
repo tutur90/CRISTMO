@@ -12,6 +12,7 @@ from cerebro.args import DataTrainingArguments, ModelArguments
 from cerebro.loss import RelativeMSELoss, BasicInvLoss, InvLoss
 from cerebro.models import model
 from cerebro.models.lstm import LSTMModel
+from cerebro.models.mlp import LSTMModel as MLPModel
 from cerebro.models.transformer import TransformerModel
 from cerebro.models.tcn import TCNModel
 from cerebro.models.tcn2 import TCN2Model
@@ -113,6 +114,8 @@ def main():
 
     if model_args.type == "lstm":
         model = LSTMModel(**model_args.__dict__, loss_fn=loss_fn)
+    elif model_args.type == "mlp":
+        model = MLPModel(**model_args.__dict__, loss_fn=loss_fn)
     elif model_args.type == "transformer":
         model = TransformerModel(**model_args.__dict__, loss_fn=RelativeMSELoss())
     elif model_args.type == "tcn":

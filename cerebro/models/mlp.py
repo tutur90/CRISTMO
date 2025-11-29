@@ -1,75 +1,184 @@
+from typing import Optional, Tuple
 import torch
 import torch.nn as nn
 
-from cerebro.loss import Loss
-
-class TimeSeriesModel(nn.Module):
-    def __init__(self, input_dim=4, hidden_dim=32, output_dim=32, seg_length=60, **kwargs):
-        super().__init__()
-        self.embedding = nn.Linear(input_dim * seg_length, hidden_dim)
-        self.relu = nn.ReLU()
-        self.lstm = nn.LSTM(hidden_dim, hidden_dim, batch_first=True)
-        self.fc = nn.Linear(hidden_dim, output_dim)
-        self.loss_fn = Loss()
-        self.seg_length = seg_length
-        self.latitude = nn.Parameter(torch.linspace(-100, 100, steps=output_dim).unsqueeze(0), requires_grad=False)
-
-    def forward(self, x):
-        B, T, C = x.shape
-        num_segments = T // self.seg_length
-        x_last = x[:, -1, 3].unsqueeze(-1)
-        x_centered = x - x_last.unsqueeze(1)
-        x_centered = x_centered.view(B, num_segments, self.seg_length * C)
-        x_centered = self.relu(self.embedding(x_centered))
-        _, (hidden, _) = self.lstm(x_centered)
-        return self.fc(hidden[-1]), x_last + self.latitude
+from cerebro.models.features import FeatureExtractor, RevIn
 
 
+class MLPCore(nn.Module):
+    """MLP-based model for cryptocurrency price prediction."""
     
+    def __init__(
+        self, 
+        input_dim: int = 4, 
+        hidden_dim: int = 64, 
+        output_dim: int = 3, 
+        seg_length: int = 60, 
+        num_layers: int = 2,
+        conv_kernel: int = 5,
+        pool_kernel: int = 1,
+        dropout: float = 0.0,
+
+
+        **kwargs
+    ):
+        """
+        Args:
+            input_dim: Number of input features
+            hidden_dim: Hidden dimension size
+            output_dim: Number of output features
+            seg_length: Length of input sequences
+            num_layers: Number of LSTM layers
+            conv_kernel: Kernel size for convolution (None to disable)
+            pool_kernel: Kernel size for pooling (None to disable)
+            dropout: Dropout probability for LSTM
+            num_symbols: Maximum number of unique symbols for embedding
+            loss_fn: Loss function to use
+        """
+        super().__init__()
+
+
+        # Feature extraction
+        self.feature_extractor = FeatureExtractor(
+            input_dim, 
+            hidden_dim, 
+            seg_length,
+            conv_kernel=conv_kernel,
+            pool_kernel=pool_kernel
+        )
+        
+        self.activation = nn.ReLU()
+        
+        # MLP layers
+        mlp_layers = []
+        for i in range(num_layers):
+            mlp_layers.append(nn.Linear(hidden_dim if i == 0 else hidden_dim, hidden_dim))
+            mlp_layers.append(self.activation)
+            if dropout > 0.0:
+                mlp_layers.append(nn.Dropout(dropout))
+        
+        self.mlp = nn.Sequential(*mlp_layers)
+
+        self.hidden_dim = hidden_dim
+        self.num_layers = num_layers
+        self.output_dim = output_dim
+
+    def forward(
+        self, 
+        sources: torch.Tensor,
+        labels: Optional[torch.Tensor] = None,
+        symbols: Optional[torch.Tensor] = None
+    ) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
+        """
+        Args:
+            src: Source tensor of shape (B, T, C)
+            tgt: Target tensor of shape (B, 1, C) or (B, output_dim) (optional)
+            symbol: Symbol indices of shape (B,) (optional)
+        Returns:
+            Tuple of (predictions, loss)
+            - predictions: Shape (B, 1, output_dim)
+            - loss: Scalar loss value (None if tgt is not provided)
+        """
+        B, T, C = sources.shape
+
+        # Extract features
+        src = self.feature_extractor(sources)  # (B, num_segments, hidden_dim)
+        
+        # src = torch.cat([src, self.start_idx.repeat(B, 1, 1), ], dim=1)  # (B, num_segments+1, hidden_dim)
+        x = self.mlp(src)  # (B, num_segments, hidden_dim)
+
+
+        return x[:, -1, :].unsqueeze(1)
+
 class LSTMModel(nn.Module):
-    def __init__(self, input_dim=4, hidden_dim=64, output_dim=3, num_layers=2, seg_length=60, loss_fn=nn.MSELoss(), **kwargs):
+    """LSTM-based model for cryptocurrency price prediction."""
+    
+    def __init__(
+        self, 
+        input_dim: int = 4, 
+        hidden_dim: int = 64, 
+        output_dim: int = 3, 
+        seg_length: int = 60, 
+        num_layers: int = 2,
+        conv_kernel: int = 5,
+        pool_kernel: int = 1,
+        dropout: float = 0.0,
+        num_symbols: int = 100,
+        loss_fn: nn.Module = None,
+        **kwargs
+    ):
+        """
+        Args:
+            input_dim: Number of input features
+            hidden_dim: Hidden dimension size
+            output_dim: Number of output features
+            seg_length: Length of input sequences
+            num_layers: Number of LSTM layers
+            conv_kernel: Kernel size for convolution (None to disable)
+            pool_kernel: Kernel size for pooling (None to disable)
+            dropout: Dropout probability for LSTM
+            num_symbols: Maximum number of unique symbols for embedding
+            loss_fn: Loss function to use
+        """
         super().__init__()
-        self.lstm = nn.LSTM(hidden_dim, hidden_dim, num_layers=num_layers, batch_first=True)
+        self.loss_fn = loss_fn if loss_fn is not None else nn.MSELoss()
+        
+        
+        # Output projection
         self.fc = nn.Linear(hidden_dim, output_dim)
-        self.conv = nn.Conv1d(input_dim, hidden_dim, kernel_size=seg_length, stride=seg_length)
-        self.loss_fn = loss_fn
-        self.latitude = nn.Parameter(torch.linspace(-100, 100, steps=output_dim).unsqueeze(0), requires_grad=False)
-        self.std_scale = True
-
-    def forward(self, x):
-        B, T, C = x.shape
-
-        std = x[:, :, 3].std(dim=1, keepdim=False) + 1e-5
-        x_last = x[:, -1, 3]
-        x_centered = (x - x_last.view(B, 1, 1))
-
-        if self.std_scale:
-            x_centered = x_centered / std.view(B, 1, 1)
-
-        x = self.conv(x_centered.permute(0, 2, 1)).permute(0, 2, 1)
-
-        x, (hidden, _) = self.lstm(x)
         
-        x = self.fc(hidden[-1])
+        # Symbol embedding for conditioning
+        self.symbol_emb = nn.Embedding(num_symbols, hidden_dim)
 
-        if self.std_scale:
-            x = x * std.view(B, 1)
-
-        return x_last.view(B, 1) + x, x_last.view(B, 1) + self.latitude
-
-class SimpleModel(nn.Module):
-    def __init__(self, input_dim=4, hidden_dim=32, output_dim=3, seg_length=60, **kwargs):
-        super().__init__()
-        self.latitude = torch.linspace(-100, 100, steps=output_dim).unsqueeze(0)
-        self.inv = nn.Linear(input_dim, output_dim)
-        self.loss_fn = Loss()
-
-    def forward(self, x):
+        self.mlp = MLPCore(
+            input_dim=input_dim,
+            hidden_dim=hidden_dim,
+            output_dim=hidden_dim,
+            seg_length=seg_length,
+            num_layers=num_layers,
+            conv_kernel=conv_kernel,
+            pool_kernel=pool_kernel,
+            dropout=dropout
+        )
         
-        x_last = x[:, -1, 3].unsqueeze(-1)
+        self.rev_in = RevIn(input_dim)
 
-        x = self.inv(x[:, -1] - x_last)
+        self.hidden_dim = hidden_dim
+        self.num_layers = num_layers
+        self.output_dim = output_dim
 
-        x = x + x_last.unsqueeze(1)
+    def forward(
+        self, 
+        sources: torch.Tensor,
+        labels: Optional[torch.Tensor] = None,
+        symbols: Optional[torch.Tensor] = None
+    ) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
+        """
+        Args:
+            src: Source tensor of shape (B, T, C)
+            tgt: Target tensor of shape (B, 1, C) or (B, output_dim) (optional)
+            symbol: Symbol indices of shape (B,) (optional)
+        Returns:
+            Tuple of (predictions, loss)
+            - predictions: Shape (B, 1, output_dim)
+            - loss: Scalar loss value (None if tgt is not provided)
+        """
+        B, T, C = sources.shape
 
-        return x, x_last + self.latitude
+        # Normalize input
+        src = self.rev_in(sources, mode='norm')
+        
+        embed_symbols = self.symbol_emb(symbols) if symbols is not None else None
+
+        x = self.mlp(src)  # (B, 1, hidden_dim)
+
+        # Get prediction from last hidden state
+        x = self.fc(x)  # (B, 1, output_dim)
+
+        # Calculate loss if target is provided
+        loss = None
+        if labels is not None:
+            loss = self.loss_fn(x, labels, self.rev_in)
+
+        return {"pred": x, "loss": loss}
+
