@@ -5,10 +5,35 @@ import torch.nn.functional as F
 
 from cerebro.models.features import FeatureExtractor, RevIn
 
+
+class DynamicTanh(nn.Module):
+    def __init__(self, normalized_shape, channels_last, alpha_init_value=0.5):
+        super().__init__()
+        self.normalized_shape = normalized_shape
+        self.alpha_init_value = alpha_init_value
+        self.channels_last = channels_last
+
+        self.alpha = nn.Parameter(torch.ones(1) * alpha_init_value)
+        self.weight = nn.Parameter(torch.ones(normalized_shape))
+        self.bias = nn.Parameter(torch.zeros(normalized_shape))
+
+    def forward(self, x):
+        x = torch.tanh(self.alpha * x)
+        if self.channels_last:
+            x = x * self.weight + self.bias
+        else:
+            x = x * self.weight[:, None, None] + self.bias[:, None, None]
+        return x
+
+    def extra_repr(self):
+        return f"normalized_shape={self.normalized_shape}, alpha_init_value={self.alpha_init_value}, channels_last={self.channels_last}"
+
+
+
 class ResidualBlock(nn.Module):
     '''Residual block to use in TCN'''
 
-    def __init__(self, input_size, hidden_size, kernel_size, dilation):
+    def __init__(self, input_size, hidden_size, kernel_size, dilation, dropout=0.0):
         super(ResidualBlock, self).__init__()
         self.input_size = input_size
         self.hidden_size = hidden_size
@@ -21,7 +46,7 @@ class ResidualBlock(nn.Module):
             kernel_size=self.kernel_size,
             dilation=dilation,
         ))
-        self.dropout1 = nn.Dropout1d(p=0.2)
+        self.dropout1 = nn.Dropout1d(p=dropout)
         self.pad2 = nn.ConstantPad1d(((self.kernel_size-1)*dilation, 0), 0.0)
         self.conv2 = torch.nn.utils.parametrizations.weight_norm(nn.Conv1d(
             in_channels=self.hidden_size,
@@ -29,7 +54,7 @@ class ResidualBlock(nn.Module):
             kernel_size=self.kernel_size,
             dilation=dilation,
         ))
-        self.dropout2 = nn.Dropout1d(p=0.2)
+        self.dropout2 = nn.Dropout1d(p=dropout)
         self.identity_conv = None
         if self.input_size > 1 and self.input_size != self.hidden_size:
             self.identity_conv = nn.Conv1d(
@@ -37,23 +62,29 @@ class ResidualBlock(nn.Module):
                 out_channels=self.hidden_size,
                 kernel_size=1,
             )
+            
+        self.activation = nn.LeakyReLU()
+        
+        print(self.hidden_size)
+        self.norm = nn.LeakyReLU()
 
     def forward(self, x):
         '''One step of computation'''
         output = self.pad1(x)
-        output = F.leaky_relu(self.conv1(output))
+        output = self.activation(self.conv1(output))
         output = self.dropout1(output)
         output = self.pad2(output)
-        output = F.leaky_relu(self.conv2(output))
+        output = self.activation(self.conv2(output))
         output = self.dropout2(output)
         if self.input_size > 1 and self.input_size != self.hidden_size:
             x = self.identity_conv(x)
-        return F.leaky_relu(x + output)
+
+        return self.norm(output + x)
 
 class TCN(nn.Module):
     '''Temporal Convolutional Network'''
 
-    def __init__(self, input_size, num_filters, kernel_sizes, dilations):
+    def __init__(self, input_size, num_filters, kernel_sizes, dilations, dropout=0.0):
         super(TCN, self).__init__()
         if len(num_filters) != len(kernel_sizes):
             raise ValueError('output_sizes and kernel_sizes must be of the same size')
@@ -66,9 +97,9 @@ class TCN(nn.Module):
         self.residuals = nn.Sequential()
         for n in range(len(kernel_sizes)):
             if n == 0:
-                self.residuals.append(ResidualBlock(self.input_size, self.num_filters[n], self.kernel_sizes[n], self.dilations[n]))
+                self.residuals.append(ResidualBlock(self.input_size, self.num_filters[n], self.kernel_sizes[n], self.dilations[n], dropout=dropout))
             else:
-                self.residuals.append(ResidualBlock(self.num_filters[n-1], self.num_filters[n], self.kernel_sizes[n], self.dilations[n]))
+                self.residuals.append(ResidualBlock(self.num_filters[n-1], self.num_filters[n], self.kernel_sizes[n], self.dilations[n], dropout=dropout))
   
     def forward(self, value):
         '''One step of computation'''

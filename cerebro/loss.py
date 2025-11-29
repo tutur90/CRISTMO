@@ -16,6 +16,23 @@ class Loss(torch.nn.Module):
         return -pnl # minimize negative log-likelihood
 
 
+class MAPE(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, output: torch.Tensor, target: torch.Tensor, rev_in: RevIn, num_items_in_batch: int= None) -> torch.Tensor:
+        
+        target = target
+
+        output = rev_in(output, mode='denorm')
+
+        if output.shape != target.shape:
+            raise ValueError(f"Output shape {output.shape} does not match target shape {target.shape}")
+        
+        # Compute the mean absolute percentage error
+        mape = torch.mean(torch.abs((output - target) / target))
+
+        return mape * 1e2  # scale factor to keep loss values manageable
 
 
 class RelativeMSELoss(torch.nn.Module):
@@ -24,7 +41,7 @@ class RelativeMSELoss(torch.nn.Module):
 
     def forward(self, output: torch.Tensor, target: torch.Tensor, rev_in: RevIn, num_items_in_batch: int= None) -> torch.Tensor:
         
-        target = target
+        target = target[:, -1:]  # (B, T)
 
         output = rev_in(output, mode='denorm')
 

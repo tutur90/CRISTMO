@@ -92,16 +92,10 @@ class LSTMCore(nn.Module):
         
         # src = torch.cat([src, self.start_idx.repeat(B, 1, 1), ], dim=1)  # (B, num_segments+1, hidden_dim)
 
-        # Initialize hidden states with symbol embedding if provided
-        if symbols is not None:
-            h0 = symbols.unsqueeze(0).repeat(self.num_layers, 1, 1)
-        else:
-            h0 = torch.zeros(self.num_layers, B, self.hidden_dim, device=src.device)
-        
-        c0 = torch.zeros_like(h0)
+
 
         # LSTM forward pass
-        _, (hidden, _) = self.lstm(src, (h0, c0))
+        _, (hidden, _) = self.lstm(src)
 
 
         return hidden[-1].unsqueeze(1)

@@ -15,9 +15,9 @@ pretrained_model: checkpoints/lstm/checkpoint-8000/model.safetensors
 
 # === Modèle ===
 
-src_length: 24
-tgt_length: 1
-seg_length: 60
+src_length: 60
+tgt_length: 60
+seg_length: 1
 type: lstm
 input_dim: 4
 hidden_dim: 128

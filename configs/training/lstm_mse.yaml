@@ -8,14 +8,14 @@ overwrite_output_dir: true
 wandb_project_name: "inv"
 
 # === Données ===
-data_path: data/futures/dataset/
-symbols: "BTCUSDT,ETHUSDT,BNBUSDT,XRPUSDT,SUIUSDT,SOLUSDT,ADAUSDT,DOGEUSDT,LTCUSDT,DOTUSDT"
+data_path: ../data/futures/dataset/
+symbols: "BTCUSDT"
 tgt_symbol: "BTCUSDT"
 start_date: "2020-01-01"
 
 # === Modèle ===
 
-src_length: 24
+src_length: 1
 tgt_length: 1
 seg_length: 60
 type: lstm

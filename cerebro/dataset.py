@@ -253,8 +253,8 @@ class CryptoDataset(Dataset):
         if self.tgt_mode == "ohlc":
             # OHLC format
             
-            target_data = target_data.reshape(-1, self.seg_length, 4)
-            
+            target_data = target_data.reshape(self.seg_length, -1, 4)
+
             result = np.array([
                 target_data[:, :, self.low_idx].min(axis=0),
                 target_data[:, :, self.high_idx].max(axis=0),
