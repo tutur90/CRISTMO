@@ -1,69 +1,11 @@
+from typing import Optional, Tuple
 import torch
 import torch.nn as nn
-from typing import Optional, Tuple
-
-
-
-class FeatureExtractor(nn.Module):
-    """Extracts features using convolution and pooling operations."""
-    
-    def __init__(
-        self, 
-        input_dim: int, 
-        hidden_dim: int, 
-        seg_length: int, 
-        conv_kernel: Optional[int] = 5,
-        pool_kernel: Optional[int] = 1
-    ):
-        super().__init__()
-        
-        self.activation = nn.ReLU()
-
-        self.conv1 = nn.Conv1d(
-            input_dim, 
-            hidden_dim, 
-            kernel_size=conv_kernel, 
-            padding=conv_kernel//2
-        ) if conv_kernel else nn.Identity()
-
-        self.pool = nn.AvgPool1d(
-            kernel_size=pool_kernel, 
-            stride=pool_kernel
-        ) if pool_kernel > 1 else nn.Identity()
-        
-        if pool_kernel and seg_length % pool_kernel != 0:
-            raise ValueError(f"seg_length ({seg_length}) must be divisible by pool_kernel ({pool_kernel})")
-
-        self.framing = nn.Conv1d(
-            hidden_dim, 
-            hidden_dim, 
-            kernel_size=seg_length//pool_kernel, 
-            stride=seg_length//pool_kernel
-        )
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """
-        Args:
-            x: Input tensor of shape (B, T, C)
-        Returns:
-            Output tensor of shape (B, num_segments, hidden_dim)
-        """
-        B, T, C = x.shape
-        
-        x = x.transpose(1, 2)  # (B, C, T)
-        
-        x = self.activation(self.conv1(x))
-        x = self.pool(x)
-        
-        x = self.framing(x)  # (B, hidden_dim, num_segments)
-        x = x.transpose(1, 2)  # (B, num_segments, hidden_dim)
-        return x
-
 
 class RevIn(nn.Module):
     """Reversible Instance Normalization for time series."""
     
-    def __init__(self, num_features: int, eps: float = 1e-5, scale_type: str = 'max'):
+    def __init__(self, num_features: int, eps: float = 1e-5, scale_type: str = 'max', scaling_idx: int = None):
         """
         Args:
             num_features: Number of features (channels) in the input tensor
@@ -74,8 +16,9 @@ class RevIn(nn.Module):
         super().__init__()
         self.eps = eps
         self.num_features = num_features
-        self.gamma = nn.Parameter(torch.ones(1, 1, num_features))
-        self.beta = nn.Parameter(torch.zeros(1, 1, num_features))
+        # self.gamma = nn.Parameter(torch.ones(1, 1, num_features))
+        # self.beta = nn.Parameter(torch.zeros(1, 1, num_features))
+        self.scaling_idx = scaling_idx
         
         self.scale = None
         self.last = None
@@ -94,7 +37,15 @@ class RevIn(nn.Module):
         
         if mode == 'norm':
             # Use close price (index 3) for normalization
-            self.last = x[:, -1, 3].view(B, 1, 1)
+            if self.scaling_idx is None:
+                self.last = x[:, -1:, :].view(B, 1, C)
+            else:
+                try:
+                    self.last = x[:, -1, self.scaling_idx].view(B, 1, 1)
+                except Exception as e:
+                    raise ValueError(f"Error accessing scaling_idx {self.scaling_idx}: {e}")
+                
+                
             x_centered = (x - self.last)
 
             if self.scale_type == 'std':

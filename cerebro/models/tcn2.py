@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from cerebro.models.features import RevIn
+from cerebro.models.modules import RevIn
 from pytorch_tcn import TCN
 
 

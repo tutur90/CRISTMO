@@ -2,7 +2,7 @@ from typing import Optional, Tuple
 import torch
 import torch.nn as nn
 
-from cerebro.models.features import FeatureExtractor, RevIn
+from cerebro.models.modules import FeatureExtractor, RevIn
 
 
 class LSTMCore(nn.Module):

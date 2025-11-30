@@ -1,8 +1,8 @@
 import math
 import torch
 import torch.nn as nn
-from cerebro.models.features import FeatureExtractor, RevIn
-from cerebro.models.modules.dytanh import DynamicTanh
+from cerebro.models.modules import FeatureExtractor, RevIn
+
 
 class PositionalEncoding(nn.Module):
 

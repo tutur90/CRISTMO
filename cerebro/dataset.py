@@ -31,7 +31,7 @@ class CryptoDataset(Dataset):
         seg_length: int = 60,
         symbols: Optional[List[str]] = ["BTCUSDT"],
         start_date: Optional[str] = None,
-        features: Optional[List[str]] = None,
+        input_features: Optional[List[str]] = None,
         normalize: bool = False,
         tgt_symbol: Optional[str] = None,
         use_fp16: bool = False,  # Use float16 for 50% memory savings
@@ -57,7 +57,7 @@ class CryptoDataset(Dataset):
 
         self.symbols = symbols
         self.start_date = start_date
-        self.features = features or ['open', 'high', 'low', 'close']
+        self.features = input_features or ['open', 'high', 'low', 'close']
         self.normalize = normalize
         self.use_fp16 = use_fp16
         
@@ -327,14 +327,24 @@ class CryptoDataset(Dataset):
         # Get symbol
         symbol_idx = int(self.symbol_indices[start_idx])
         
-
-        
-        # Zero-copy conversion to torch tensors
-        return {
+        output = {
             "sources": torch.from_numpy(src_data.copy()),  # Copy needed if fp16->fp32 conversion
             "labels": torch.from_numpy(tgt_transformed),
             "symbols": torch.tensor(symbol_idx, dtype=torch.long)
         }
+        
+        vol_col = {"volume", "quote_volume", "count", "taker_buy_volume", "taker_buy_quote_volume"}
+        
+        additional_cols = list(vol_col.intersection(set(self.features)))
+        
+        if len(additional_cols) > 0:
+            vol_idx = self.features.index(additional_cols[0])
+            output["volumes"] = torch.from_numpy(
+                src_data[:, vol_idx].copy().reshape(-1, 1)
+            )
+
+        # Zero-copy conversion to torch tensors
+        return output
 
     def get_metadata(self, index: int) -> dict:
         """Get metadata for a specific sample."""

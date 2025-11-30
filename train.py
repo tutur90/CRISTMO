@@ -9,11 +9,11 @@ from transformers import Trainer, TrainingArguments, HfArgumentParser, set_seed
 from safetensors.torch import load_file as safe_open
 
 from cerebro.args import DataTrainingArguments, ModelArguments
-from cerebro.loss import RelativeMSELoss, BasicInvLoss, InvLoss
-from cerebro.models import model
+from cerebro.loss import RelativeMSELoss, BasicInvLoss, InvLoss, MAPE, MSPE
 from cerebro.models.lstm import LSTMModel
-from cerebro.models.mlp import LSTMModel as MLPModel
+from cerebro.models.mlp import MLPModel
 from cerebro.models.transformer import TransformerModel
+from cerebro.models.transformer2 import TransformerModel as Transformer2Model
 from cerebro.models.tcn import TCNModel
 from cerebro.models.tcn2 import TCN2Model
 from cerebro.dataset import CryptoDataset
@@ -108,7 +108,13 @@ def main():
     elif model_args.loss_function["type"] == "inv":
 
         loss_fn = InvLoss(**model_args.loss_function)
-        
+
+    elif model_args.loss_function["type"] == "mape":
+        loss_fn = MAPE(**model_args.loss_function)
+
+    elif model_args.loss_function["type"] == "mspe":
+        loss_fn = MSPE(**model_args.loss_function)
+
     else:
         raise ValueError(f"Unknown loss function: {model_args.loss_function}")
 
@@ -118,6 +124,8 @@ def main():
         model = MLPModel(**model_args.__dict__, loss_fn=loss_fn)
     elif model_args.type == "transformer":
         model = TransformerModel(**model_args.__dict__, loss_fn=RelativeMSELoss())
+    elif model_args.type == "transformer2":
+        model = Transformer2Model(**model_args.__dict__, loss_fn=RelativeMSELoss())
     elif model_args.type == "tcn":
         model = TCNModel(**model_args.__dict__, loss_fn=loss_fn)
     elif model_args.type == "tcn2":

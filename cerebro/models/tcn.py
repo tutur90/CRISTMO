@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from cerebro.models.features import FeatureExtractor, RevIn
+from cerebro.models.modules import FeatureExtractor, RevIn
 
 
 class DynamicTanh(nn.Module):

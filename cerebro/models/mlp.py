@@ -2,7 +2,7 @@ from typing import Optional, Tuple
 import torch
 import torch.nn as nn
 
-from cerebro.models.features import FeatureExtractor, RevIn
+from cerebro.models.modules import FeatureExtractor, RevIn
 
 
 class MLPCore(nn.Module):
@@ -90,8 +90,8 @@ class MLPCore(nn.Module):
 
         return x[:, -1, :].unsqueeze(1)
 
-class LSTMModel(nn.Module):
-    """LSTM-based model for cryptocurrency price prediction."""
+class MLPModel(nn.Module):
+    """MLP-based model for cryptocurrency price prediction."""
     
     def __init__(
         self, 

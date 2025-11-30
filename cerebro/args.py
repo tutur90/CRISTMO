@@ -28,9 +28,9 @@ class ModelArguments:
         default=0.1, metadata={"help": "The dropout rate for the model."}
     )       
     
-    input_dim: int = field(
-        default=4, metadata={"help": "The number of input features."}
-    )
+    input_features: Optional[str] = field(
+        default="open,high,low,close", metadata={"help": "Comma-separated list of input features."}
+    )   
     output_dim: int = field(
         default=3, metadata={"help": "The number of output features."}
     )   

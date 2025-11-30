@@ -1,6 +1,7 @@
 import torch
+import torch.nn as nn
 from typing import Optional
-from cerebro.models.features import RevIn
+from cerebro.models.modules import RevIn
 
 class Loss(torch.nn.Module):
     def __init__(self):
@@ -16,50 +17,82 @@ class Loss(torch.nn.Module):
         return -pnl # minimize negative log-likelihood
 
 
-class MAPE(torch.nn.Module):
+class RelativeMSELoss(nn.Module):
+    """
+    Relative Mean Squared Error Loss
+    """
     def __init__(self):
-        super().__init__()
+        super(RelativeMSELoss, self).__init__()
 
-    def forward(self, output: torch.Tensor, target: torch.Tensor, rev_in: RevIn, num_items_in_batch: int= None) -> torch.Tensor:
-        
-        target = target
+    def forward(self, y_pred, y_true):
+        """
+        Args:
+            y_pred: predicted values (tensor)
+            y_true: actual values (tensor)
 
-        output = rev_in(output, mode='denorm')
-
-        if output.shape != target.shape:
-            raise ValueError(f"Output shape {output.shape} does not match target shape {target.shape}")
-        
-        # Compute the mean absolute percentage error
-        mape = torch.mean(torch.abs((output - target) / target))
-
-        return mape * 1e2  # scale factor to keep loss values manageable
+        Returns:
+            Relative MSE loss
+        """
+        return nn.functional.mse_loss(y_pred, y_true)
 
 
-class RelativeMSELoss(torch.nn.Module):
-    def __init__(self, use_close=False):
-        super().__init__()
+class MAPE(nn.Module):
+    """
+    Mean Absolute Percentage Error Loss
+    """
+    def __init__(self, epsilon=1e-8, use_close=True):
+        """
+        Args:
+            epsilon: small constant to avoid division by zero
+        """
+        super(MAPE, self).__init__()
+        self.epsilon = epsilon
         self.use_close = use_close
 
-    def forward(self, output: torch.Tensor, target: torch.Tensor, rev_in: RevIn, num_items_in_batch: int= None) -> torch.Tensor:
-        
-        target = target[:, -1:]  # (B, T)
+    def forward(self, y_pred, y_true):
+        """
+        Args:
+            y_pred: predicted values (tensor)
+            y_true: actual values (tensor)
 
-        output = rev_in(output, mode='denorm')
-
-        if output.shape != target.shape:
-            raise ValueError(f"Output shape {output.shape} does not match target shape {target.shape}")
-        
+        Returns:
+            MAPE loss as percentage
+        """
         if self.use_close:
-            output = output[:, -1:]
-            target = target[:, -1:]
+            y_pred = y_pred[:, -1]  # (B, T)
+            y_true = y_true[:, -1]  # (B, T)
+        # Add epsilon to avoid division by zero
+        loss = torch.mean(torch.abs((y_true - y_pred) / (y_true + self.epsilon))) * 100
+        return loss
+    
+class MSPE(nn.Module):
+    """
+    Mean Squared Percentage Error Loss
+    """
+    def __init__(self, epsilon=1e-8, use_close=True):
+        """
+        Args:
+            epsilon: small constant to avoid division by zero
+        """
+        super(MSPE, self).__init__()
+        self.epsilon = epsilon
+        self.use_close = use_close  
+    def forward(self, y_pred, y_true):
+        """
+        Args:
+            y_pred: predicted values (tensor)
+            y_true: actual values (tensor)
+        
+        Returns:
+            MSPE loss as percentage
+        """
+        if self.use_close:
+            y_pred = y_pred[:, -1]  # (B, T)
+            y_true = y_true[:, -1]  # (B, T)
+        loss = torch.mean(((y_true - y_pred) / (y_true + self.epsilon) * 100) ** 2) 
+        return loss
 
-        # Compute the mean squared error
-        mse = torch.mean((output - target) ** 2)
 
-        # Compute the relative mean squared error
-        relative_mse = mse
-
-        return relative_mse * 1e4  # scale factor to keep loss values manageable
 
 
 class BasicInvLoss(torch.nn.Module):
