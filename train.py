@@ -133,9 +133,6 @@ def main():
         model = TCNModel(**model_args.__dict__, loss_fn=loss_fn)
     elif model_args.type == "tcn2":
         model = TCN2Model(**model_args.__dict__, loss_fn=loss_fn)
-    elif model_args.type == "static":
-        from cerebro.models.static import StaticModel
-        model = StaticModel(**model_args.__dict__, loss_fn=loss_fn)
     else:
         raise ValueError(f"Unknown model type: {model_args.type}")
     
@@ -227,6 +224,7 @@ def main():
         trainer.log_metrics("train", metrics)
         trainer.save_metrics("train", metrics)
         trainer.save_state()
+        
 
     
     if training_args.do_eval:
@@ -235,22 +233,27 @@ def main():
         
         
         results = trainer.evaluate()
+        
+        metrics = {}
+        
+        for key, value in results.items():
+            
+            metrics[f"best_{key}"] = value
 
+        metrics["best_global_step"] = trainer.state.best_global_step
 
-        trainer.log_metrics("eval", results)
-        trainer.save_metrics("eval", results)
+        trainer.log_metrics("eval", metrics)
+        trainer.save_metrics("eval", metrics)
 
     if training_args.do_predict:
         
 
         logger.info("*** Predict ***")
 
-        test_dataset = CryptoDataset(**data_args.__dict__, split="test")
+        test_dataset = CryptoDataset(**data_args.__dict__, **model_args.__dict__, split="test")
 
 
-        results = trainer.predict(test_dataset,  metric_key_prefix="predict"
-
-        )
+        results = trainer.predict(test_dataset,  metric_key_prefix="predict").metrics
 
 
         trainer.log_metrics("predict", results)

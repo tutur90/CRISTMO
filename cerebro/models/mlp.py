@@ -146,7 +146,7 @@ class MLPModel(BaseModel):
         self.hidden_dim = hidden_dim
         self.num_layers = num_layers
         self.output_dim = output_dim
-        self.static = True
+        self.static = False
 
     def forward(
         self, 

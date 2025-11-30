@@ -18,7 +18,7 @@ src_length: 1
 tgt_length: 1
 seg_length: 60
 type: mlp
-input_features: ["open", "high", "low", "close"]
+input_features: ["open", "high", "low", "close", "volume", "taker_buy_volume", "count"]
 hidden_dim: 128
 output_dim: 4
 num_layers: 3
@@ -33,8 +33,9 @@ loss_function:
 # === Entraînement ===
 do_eval: true
 do_train: true
-per_device_train_batch_size: 1024
-per_device_eval_batch_size: 1024
+do_predict: true
+per_device_train_batch_size: 2048
+per_device_eval_batch_size: 4096
 # total_batch_size: 64
 # gradient_accumulation_steps: 16
 
@@ -43,7 +44,7 @@ save_steps: 1000
 eval_delay: 500
 eval_steps: 500
 eval_strategy: steps
-prediction_loss_only: true
+prediction_loss_only: false
 load_best_model_at_end: true
 metric_for_best_model: loss
 greater_is_better: false
@@ -52,7 +53,7 @@ disable_tqdm: false
 ddp_find_unused_parameters: false
 logging_steps: 100
 save_total_limit: 3
-report_to: []
+report_to: ["wandb"]
 
 
 dataloader_num_workers: 7

@@ -62,7 +62,7 @@ class RevIn(nn.Module):
             else:
                 raise ValueError(f"Unknown scale type: {self.scale_type}")
 
-            x_centered = x_centered / self.scale.view(B, 1, 1)
+            x_centered = x_centered / self.scale.view(B, 1, -1)
             return x_centered
             
         elif mode == 'denorm':

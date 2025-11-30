@@ -345,7 +345,7 @@ class CryptoDataset(Dataset):
         if len(additional_cols) > 0:
             vols_idx = [self.features.index(col) for col in additional_cols]
             output["volumes"] = torch.from_numpy(
-                src_data[:, vols_idx].copy().reshape(-1, 1)
+                src_data[:, vols_idx].copy()
             )
 
         # Zero-copy conversion to torch tensors

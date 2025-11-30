@@ -1,8 +1,8 @@
 
 
-run_name: lstm 
+run_name: tcn2
 
-output_dir: checkpoints/forecast/lstm
+output_dir: checkpoints/forecast/tcn2
 overwrite_output_dir: true
 
 wandb_project_name: "crypto-forecast"
@@ -15,32 +15,27 @@ start_date: "2020-01-01"
 
 # === Modèle ===
 
-
-src_length: 1
+src_length: 3
 tgt_length: 1
 seg_length: 60
-type: lstm
-input_features: ["open", "high", "low", "close", "volume", "taker_buy_volume", "count"]
+type: tcn2
+input_dim: 4
 hidden_dim: 128
 output_dim: 4
-num_layers: 1
-dropout: 0.1  # Add dropout for regularization
-bidirectional: false  # Set to true for bidirectional LSTM if supported
-conv_kernel: 5
-pool_kernel: 1
-loss_function: 
+num_layers: 7
+conv_kernel: 3
+dropout: 0.0
+loss_function:
   type: rmspe
-  epsilon: 1.e-6
+  epsilon: 1e-8
   use_close: true
 
 # === Entraînement ===
 do_eval: true
 do_train: true
 do_predict: true
-per_device_train_batch_size: 1024
-per_device_eval_batch_size: 2048
-# total_batch_size: 8192
-# gradient_accumulation_steps: 16
+per_device_train_batch_size: 512
+per_device_eval_batch_size: 4096
 
 max_steps: 10000
 save_steps: 1000
@@ -58,21 +53,16 @@ logging_steps: 100
 save_total_limit: 3
 report_to: ["wandb"]
 
-
-dataloader_num_workers: 7
+dataloader_num_workers: 16
 dataloader_drop_last: false
-dataloader_pin_memory : true
-
+dataloader_pin_memory: true
 
 learning_rate: 2.e-4
 lr_scheduler_type: cosine
 warmup_steps: 500
-# max_grad_norm: 2.0
-# weight_decay: 0.0005
-
 
 bf16: false
-fp16: false
+fp16: true
 
 accelerator_config:
   split_batches: false
