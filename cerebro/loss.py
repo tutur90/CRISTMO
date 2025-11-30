@@ -36,8 +36,9 @@ class MAPE(torch.nn.Module):
 
 
 class RelativeMSELoss(torch.nn.Module):
-    def __init__(self):
+    def __init__(self, use_close=False):
         super().__init__()
+        self.use_close = use_close
 
     def forward(self, output: torch.Tensor, target: torch.Tensor, rev_in: RevIn, num_items_in_batch: int= None) -> torch.Tensor:
         
@@ -48,6 +49,10 @@ class RelativeMSELoss(torch.nn.Module):
         if output.shape != target.shape:
             raise ValueError(f"Output shape {output.shape} does not match target shape {target.shape}")
         
+        if self.use_close:
+            output = output[:, -1:]
+            target = target[:, -1:]
+
         # Compute the mean squared error
         mse = torch.mean((output - target) ** 2)
 

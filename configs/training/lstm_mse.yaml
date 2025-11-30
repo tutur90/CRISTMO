@@ -22,8 +22,8 @@ type: lstm
 input_dim: 4
 hidden_dim: 128
 output_dim: 4
-num_layers: 2
-dropout: 0.0  # Add dropout for regularization
+num_layers: 1
+dropout: 0.1  # Add dropout for regularization
 bidirectional: false  # Set to true for bidirectional LSTM if supported
 conv_kernel: 5
 pool_kernel: 1

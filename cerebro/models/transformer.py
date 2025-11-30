@@ -2,6 +2,7 @@ import math
 import torch
 import torch.nn as nn
 from cerebro.models.features import FeatureExtractor, RevIn
+from cerebro.models.modules.dytanh import DynamicTanh
 
 class PositionalEncoding(nn.Module):
 
@@ -18,25 +19,26 @@ class PositionalEncoding(nn.Module):
         self.register_buffer('pe', pe)
 
     def forward(self, x):
-        x = x + self.pe[:x.size(0), :]
+        x = x + self.pe[:, :x.size(1), :]
         return self.dropout(x)
         
 
 class TransformerModel(nn.Module):
-    def __init__(self, input_dim=4, hidden_dim=64, output_dim=3, seg_length=60, loss_fn=nn.MSELoss(), num_layers=6, norm=nn.LayerNorm, **kwargs):
+    def __init__(self, input_dim=4, hidden_dim=64, output_dim=3, seg_length=60, loss_fn=nn.MSELoss(), num_layers=6, norm=nn.LayerNorm, dropout=0.1, **kwargs):
         super().__init__()
         self.loss_fn = loss_fn
         
         self.rev_in = RevIn(input_dim)
         self.feature_extractor = FeatureExtractor(input_dim, hidden_dim, seg_length)
 
-
+    
+        
         self.positional_encoding = PositionalEncoding(hidden_dim, max_len=25)
         
         self.symbol_emb = nn.Embedding(100, hidden_dim)  # Assuming max 100 unique symbols
 
         self.encoder = nn.TransformerEncoder(
-            nn.TransformerEncoderLayer(d_model=hidden_dim, nhead=4, dim_feedforward=hidden_dim*4, dropout=0.1, activation='relu', batch_first=True),
+            nn.TransformerEncoderLayer(d_model=hidden_dim, nhead=4, dim_feedforward=hidden_dim*4, dropout=dropout, activation='relu', batch_first=True),
             num_layers=num_layers, norm=norm(hidden_dim) if norm else None
         )
         
@@ -50,9 +52,9 @@ class TransformerModel(nn.Module):
         x = self.rev_in(sources, mode='norm')
         x = self.feature_extractor(x)
 
-        if symbols is not None:
+        # if symbols is not None:
 
-            x = torch.cat([x, self.symbol_emb(symbols).unsqueeze(1)], dim=1)
+        #     x = torch.cat([x, self.symbol_emb(symbols).unsqueeze(1)], dim=1)
 
         x = self.positional_encoding(x)
 

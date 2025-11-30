@@ -15,15 +15,15 @@ start_date: "2020-01-01"
 
 # === Modèle ===
 
-src_length: 1
+src_length: 24
 tgt_length: 1
 seg_length: 60
 type: transformer
 input_dim: 4
 hidden_dim: 128
 output_dim: 4
-num_layers: 2
-dropout: 0.0  # Add dropout for regularization
+num_layers: 1
+dropout: 0.1  # Add dropout for regularization
 conv_kernel: 5
 pool_kernel: 1
 loss_function: 
