@@ -4,8 +4,10 @@ import torch.nn as nn
 from cerebro.models.modules import FeatureExtractor, RevIn
 
 class BaseModel(nn.Module):
-    def __init__(self, input_features, **kwargs):
+    def __init__(self, input_features, loss_fn=None, **kwargs):
         super().__init__()
+        
+        self.loss_fn = loss_fn 
         
         self.ohlc = {'open', 'high', 'low', 'close'}.intersection(set(input_features))
         
@@ -31,6 +33,7 @@ class BaseModel(nn.Module):
     def post_forward(self, x, labels=None):
         loss = None
         if labels is not None:
-            loss = self.loss_fn(x, labels, self.rev_in)
+            x = self.rev_in(x, mode='denorm')
+            loss = self.loss_fn(x, labels)
         return {"pred": x, "loss": loss}
     

@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from cerebro.models.modules import FeatureExtractor, RevIn
+from cerebro.models.base_model import BaseModel
 
 
 class DynamicTanh(nn.Module):
@@ -167,12 +167,12 @@ class TCNCore(nn.Module):
         return x[:, :, -1].unsqueeze(1)  # (B, 1, hidden_dim)
 
 
-class TCNModel(nn.Module):
+class TCNModel(BaseModel):
     """TCN-based model for cryptocurrency price prediction."""
 
     def __init__(
         self,
-        input_dim: int = 4,
+        input_features: list,
         hidden_dim: int = 64,
         output_dim: int = 3,
         seg_length: int = 60,
@@ -197,7 +197,7 @@ class TCNModel(nn.Module):
             num_symbols: Maximum number of unique symbols for embedding
             loss_fn: Loss function to use
         """
-        super().__init__()
+        super().__init__(features=input_features)
         self.loss_fn = loss_fn if loss_fn is not None else nn.MSELoss()
 
         # Output projection
@@ -208,7 +208,7 @@ class TCNModel(nn.Module):
 
         # TCN core
         self.tcn = TCNCore(
-            input_dim=input_dim,
+            input_dim=len(input_features),
             hidden_dim=hidden_dim,
             seg_length=seg_length,
             kernels=kernels,
@@ -218,7 +218,6 @@ class TCNModel(nn.Module):
             num_symbols=num_symbols,
         )
 
-        self.rev_in = RevIn(input_dim)
 
         self.hidden_dim = hidden_dim
         self.output_dim = output_dim
@@ -242,20 +241,16 @@ class TCNModel(nn.Module):
         B, T, C = sources.shape
 
         # Normalize input
-        src = self.rev_in(sources, mode='norm')
+        x = self.pre_forward(sources)  # (B, T, C)
 
         # Get symbol embeddings if provided
-        embed_symbols = self.symbol_emb(symbols) if symbols is not None else None
+        # embed_symbols = self.symbol_emb(symbols) if symbols is not None else None
 
         # TCN forward pass
-        x = self.tcn(src, symbols=embed_symbols)  # (B, 1, hidden_dim)
+        x = self.tcn(x)  # (B, 1, hidden_dim)
 
         # Get prediction from hidden state
         x = self.fc(x)  # (B, 1, output_dim)
 
-        # Calculate loss if target is provided
-        loss = None
-        if labels is not None:
-            loss = self.loss_fn(x, labels, self.rev_in)
 
-        return {"pred": x, "loss": loss}
+        return self.post_forward(x, labels)

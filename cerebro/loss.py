@@ -24,7 +24,7 @@ class RelativeMSELoss(nn.Module):
     def __init__(self):
         super(RelativeMSELoss, self).__init__()
 
-    def forward(self, y_pred, y_true):
+    def forward(self, y_pred, y_true, num_items_in_batch: int= None):
         """
         Args:
             y_pred: predicted values (tensor)
@@ -40,7 +40,7 @@ class MAPE(nn.Module):
     """
     Mean Absolute Percentage Error Loss
     """
-    def __init__(self, epsilon=1e-8, use_close=True):
+    def __init__(self, epsilon=1e-8, use_close=True, **kwargs):
         """
         Args:
             epsilon: small constant to avoid division by zero
@@ -49,7 +49,8 @@ class MAPE(nn.Module):
         self.epsilon = epsilon
         self.use_close = use_close
 
-    def forward(self, y_pred, y_true):
+    def forward(self, y_pred, y_true,  num_items_in_batch: int= None):
+        
         """
         Args:
             y_pred: predicted values (tensor)
@@ -58,26 +59,30 @@ class MAPE(nn.Module):
         Returns:
             MAPE loss as percentage
         """
+        
+        
         if self.use_close:
             y_pred = y_pred[:, -1]  # (B, T)
             y_true = y_true[:, -1]  # (B, T)
+            
+        y_true, y_pred = y_true.exp(), y_pred.exp()
         # Add epsilon to avoid division by zero
         loss = torch.mean(torch.abs((y_true - y_pred) / (y_true + self.epsilon))) * 100
         return loss
     
-class MSPE(nn.Module):
+class RMSPE(nn.Module):
     """
     Mean Squared Percentage Error Loss
     """
-    def __init__(self, epsilon=1e-8, use_close=True):
+    def __init__(self, epsilon=1e-8, use_close=True, **kwargs):
         """
         Args:
             epsilon: small constant to avoid division by zero
         """
-        super(MSPE, self).__init__()
+        super(RMSPE, self).__init__()
         self.epsilon = epsilon
         self.use_close = use_close  
-    def forward(self, y_pred, y_true):
+    def forward(self, y_pred, y_true, num_items_in_batch: int= None):
         """
         Args:
             y_pred: predicted values (tensor)
@@ -89,7 +94,9 @@ class MSPE(nn.Module):
         if self.use_close:
             y_pred = y_pred[:, -1]  # (B, T)
             y_true = y_true[:, -1]  # (B, T)
-        loss = torch.mean(((y_true - y_pred) / (y_true + self.epsilon) * 100) ** 2) 
+            
+        y_true, y_pred = y_true.exp(), y_pred.exp()
+        loss = torch.sqrt(torch.mean(((y_true - y_pred) / (y_true + self.epsilon)) ** 2)) * 100
         return loss
 
 

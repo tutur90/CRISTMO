@@ -9,7 +9,7 @@ from transformers import Trainer, TrainingArguments, HfArgumentParser, set_seed
 from safetensors.torch import load_file as safe_open
 
 from cerebro.args import DataTrainingArguments, ModelArguments
-from cerebro.loss import RelativeMSELoss, BasicInvLoss, InvLoss, MAPE, MSPE
+from cerebro.loss import RelativeMSELoss, BasicInvLoss, InvLoss, MAPE, RMSPE
 from cerebro.models.lstm import LSTMModel
 from cerebro.models.mlp import MLPModel
 from cerebro.models.transformer import TransformerModel
@@ -18,12 +18,15 @@ from cerebro.models.tcn import TCNModel
 from cerebro.models.tcn2 import TCN2Model
 from cerebro.dataset import CryptoDataset
 
+from cerebro.utils import rmspe_loss, mape_loss, mae_loss, rmse_loss
+
 logger = logging.getLogger(__name__)
 
 class CustomTrainer(Trainer):
     """
     Custom Trainer to handle our specific model outputs.
     """
+    
     
 
 def main():
@@ -112,8 +115,8 @@ def main():
     elif model_args.loss_function["type"] == "mape":
         loss_fn = MAPE(**model_args.loss_function)
 
-    elif model_args.loss_function["type"] == "mspe":
-        loss_fn = MSPE(**model_args.loss_function)
+    elif model_args.loss_function["type"] == "rmspe":
+        loss_fn = RMSPE(**model_args.loss_function)
 
     else:
         raise ValueError(f"Unknown loss function: {model_args.loss_function}")
@@ -147,8 +150,7 @@ def main():
         model.load_state_dict(state_dict, strict=False)
         logger.info("Pretrained model loaded successfully.")
         
-        
-    def compute_metrics(p):
+    def plot_repartition(p):
         
         import numpy as np
         import matplotlib.pyplot as plt
@@ -163,7 +165,7 @@ def main():
         plt.savefig(os.path.join(training_args.output_dir, "training_loss.png"))
 
         plt.close()
-
+        
         avg_repartition = np.mean(p.predictions, axis=0).squeeze()
         
         plt.figure(figsize=(10, 5))
@@ -174,10 +176,25 @@ def main():
         plt.savefig(os.path.join(training_args.output_dir, "avg_repartition.png"))
         plt.close()
         
+        print(f"{model_args.loss_function['type']}_loss")
+        
+    def compute_forcast(out):
+        
+        results = {}
+        
+        results['rmse'] = rmse_loss(out.predictions, out.label_ids)
+        results['mae'] = mae_loss(out.predictions, out.label_ids)
+        
+        results["rmspe"] = rmspe_loss(out.predictions, out.label_ids)
+        
+        results["mape"] = mape_loss(out.predictions, out.label_ids)
+        
+        return results
 
-        return {
-            "loss": p.losses.mean(),
-        }
+        
+    def compute_metrics(out):
+
+        return compute_forcast(out)
 
     # Initialize our Trainer
     trainer = CustomTrainer(

@@ -2,9 +2,9 @@
 
 run_name: transformer2
 
-wandb_project_name: "crypto-mspe"
+wandb_project_name: "crypto-forecast"
 
-output_dir: checkpoints/transformer2_mspe
+output_dir: checkpoints/forecast/transformer2
 overwrite_output_dir: true
 
 
@@ -29,7 +29,7 @@ dropout: 0.1  # Add dropout for regularization
 conv_kernel: 5
 pool_kernel: 1
 loss_function:
-  type: mspe
+  type: rmspe
   epsilon: 1e-8
   use_close: true
 

@@ -2,10 +2,10 @@
 
 run_name: lstm 
 
-output_dir: checkpoints/lstm_mspe
+output_dir: checkpoints/forecast/lstm
 overwrite_output_dir: true
 
-wandb_project_name: "crypto-mspe"
+wandb_project_name: "crypto-forecast"
 
 # === Données ===
 data_path: ../data/futures/dataset/
@@ -29,8 +29,8 @@ bidirectional: false  # Set to true for bidirectional LSTM if supported
 conv_kernel: 5
 pool_kernel: 1
 loss_function: 
-  type: mspe
-  epsilon: 1e-8
+  type: rmspe
+  epsilon: 1.e-6
   use_close: true
 
 # === Entraînement ===
@@ -58,7 +58,7 @@ save_total_limit: 3
 report_to: []
 
 
-dataloader_num_workers: 16
+dataloader_num_workers: 7
 dataloader_drop_last: false
 dataloader_pin_memory : true
 
@@ -71,7 +71,7 @@ warmup_steps: 500
 
 
 bf16: false
-fp16: true
+fp16: false
 
 accelerator_config:
   split_batches: false

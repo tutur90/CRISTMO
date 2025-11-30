@@ -2,10 +2,10 @@
 
 run_name: tcn 
 
-output_dir: checkpoints/tcn_mspe
+output_dir: checkpoints/forecast/tcn
 overwrite_output_dir: true
 
-wandb_project_name: "crypto-mspe"
+wandb_project_name: "crypto-forecast"
 
 # === Données ===
 data_path: ../data/futures/dataset/
@@ -27,7 +27,7 @@ dilations: [1, 5, 15, 30]
 conv_kernel: 5
 pool_kernel: 1
 loss_function:
-  type: mspe
+  type: rmspe
   epsilon: 1e-8
   use_close: true
 

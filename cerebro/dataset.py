@@ -253,7 +253,7 @@ class CryptoDataset(Dataset):
         if self.tgt_mode == "ohlc":
             # OHLC format
             
-            target_data = target_data.reshape(self.seg_length, -1, 4)
+            target_data = target_data[:, ].reshape(self.seg_length, -1, 4)
 
             result = np.array([
                 target_data[:, :, self.low_idx].min(axis=0),
@@ -307,9 +307,10 @@ class CryptoDataset(Dataset):
         src_data = self.feature_data[start_idx:src_end]
         tgt_data = self.feature_data[tgt_start:tgt_end]
     
+        ovhl_idx = [self.open_idx, self.high_idx, self.low_idx, self.close_idx]
         
         # Transform target (always float32 for precision)
-        tgt_transformed = self._target_transform(tgt_data)
+        tgt_transformed = self._target_transform(tgt_data[:, ovhl_idx])
         
         # Normalize if needed
         if self.normalize:
@@ -327,20 +328,24 @@ class CryptoDataset(Dataset):
         # Get symbol
         symbol_idx = int(self.symbol_indices[start_idx])
         
+
+        
         output = {
-            "sources": torch.from_numpy(src_data.copy()),  # Copy needed if fp16->fp32 conversion
+            "sources": torch.from_numpy(src_data[:, ovhl_idx]),  # Copy needed if fp16->fp32 conversion
             "labels": torch.from_numpy(tgt_transformed),
             "symbols": torch.tensor(symbol_idx, dtype=torch.long)
         }
+        
+        # print(output["sources"].shape)
         
         vol_col = {"volume", "quote_volume", "count", "taker_buy_volume", "taker_buy_quote_volume"}
         
         additional_cols = list(vol_col.intersection(set(self.features)))
         
         if len(additional_cols) > 0:
-            vol_idx = self.features.index(additional_cols[0])
+            vols_idx = [self.features.index(col) for col in additional_cols]
             output["volumes"] = torch.from_numpy(
-                src_data[:, vol_idx].copy().reshape(-1, 1)
+                src_data[:, vols_idx].copy().reshape(-1, 1)
             )
 
         # Zero-copy conversion to torch tensors
