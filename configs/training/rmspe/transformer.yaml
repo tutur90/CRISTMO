@@ -19,7 +19,7 @@ src_length: 24
 tgt_length: 1
 seg_length: 60
 type: transformer
-input_dim: 4
+input_features: ["open", "high", "low", "close", "volume", "taker_buy_volume", "count"]
 hidden_dim: 128
 output_dim: 4
 num_layers: 1
@@ -28,7 +28,7 @@ conv_kernel: 5
 pool_kernel: 1
 loss_function: 
   type: rmspe
-  epsilon: 1e-8
+  epsilon: 1.e-6
   use_close: true
 
 # === Entraînement ===
@@ -44,7 +44,7 @@ save_steps: 1000
 eval_delay: 500
 eval_steps: 500
 eval_strategy: steps
-prediction_loss_only: true
+prediction_loss_only: false
 load_best_model_at_end: true
 metric_for_best_model: loss
 greater_is_better: false
@@ -53,7 +53,7 @@ disable_tqdm: false
 ddp_find_unused_parameters: false
 logging_steps: 100
 save_total_limit: 3
-report_to: []
+report_to: ["wandb"]
 
 
 dataloader_num_workers: 16

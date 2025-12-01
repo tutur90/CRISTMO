@@ -253,11 +253,11 @@ def main():
         test_dataset = CryptoDataset(**data_args.__dict__, **model_args.__dict__, split="test")
 
 
-        results = trainer.predict(test_dataset,  metric_key_prefix="predict").metrics
+        results = trainer.predict(test_dataset).metrics
 
 
-        trainer.log_metrics("predict", results)
-        trainer.save_metrics("predict", results)
+        trainer.log_metrics("test", results)
+        trainer.save_metrics("test", results)
 
 
     return results

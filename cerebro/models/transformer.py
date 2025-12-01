@@ -2,6 +2,7 @@ import math
 import torch
 import torch.nn as nn
 from cerebro.models.modules import FeatureExtractor, RevIn
+from cerebro.models.base_model import BaseModel
 
 
 class PositionalEncoding(nn.Module):
@@ -23,15 +24,15 @@ class PositionalEncoding(nn.Module):
         return self.dropout(x)
         
 
-class TransformerModel(nn.Module):
-    def __init__(self, input_dim=4, hidden_dim=64, output_dim=3, seg_length=60, loss_fn=nn.MSELoss(), num_layers=6, norm=nn.LayerNorm, dropout=0.1, **kwargs):
-        super().__init__()
+class TransformerModel(BaseModel):
+    def __init__(self, input_features, hidden_dim=64, output_dim=3, seg_length=60, loss_fn=nn.MSELoss(), num_layers=6, norm=nn.LayerNorm, dropout=0.1, **kwargs):
+        super().__init__(input_features, loss_fn=loss_fn)
+        
+        
         self.loss_fn = loss_fn
         
-        self.rev_in = RevIn(input_dim)
-        self.feature_extractor = FeatureExtractor(input_dim, hidden_dim, seg_length)
 
-    
+        self.feature_extractor = FeatureExtractor(len(input_features), hidden_dim, seg_length)
         
         self.positional_encoding = PositionalEncoding(hidden_dim, max_len=25)
         
@@ -46,10 +47,10 @@ class TransformerModel(nn.Module):
         
         self.fc = nn.Linear(hidden_dim, output_dim)
 
-    def forward(self, sources, labels=None, symbols=None, **kwargs):
+    def forward(self, sources, volumes=None, labels=None, symbols=None, **kwargs):
         B, T, C = sources.shape
 
-        x = self.rev_in(sources, mode='norm')
+        x = self.pre_forward(sources, volumes=volumes)
         x = self.feature_extractor(x)
 
         # if symbols is not None:
@@ -63,8 +64,4 @@ class TransformerModel(nn.Module):
      
         x = self.fc(x[:, -1, :]).unsqueeze(1)  # (B, 1, output_dim)
 
-        loss = None
-        if labels is not None:
-            loss = self.loss_fn(x, labels, self.rev_in)
-
-        return {"pred": x, "loss": loss}
+        return self.post_forward(x, labels=labels)

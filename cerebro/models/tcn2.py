@@ -3,8 +3,10 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from cerebro.models.modules import RevIn
+from cerebro.models.base_model import BaseModel
 from pytorch_tcn import TCN
+
+
 
 
 
@@ -69,12 +71,12 @@ class TCN2Core(nn.Module):
         return x[:, :, -1].unsqueeze(1)  # (B, 1, hidden_dim)
 
 
-class TCN2Model(nn.Module):
+class TCN2Model(BaseModel):
     """TCN-based model using pytorch_tcn library for cryptocurrency price prediction."""
 
     def __init__(
         self,
-        input_dim: int = 4,
+        input_features: list,
         hidden_dim: int = 64,
         output_dim: int = 3,
         seg_length: int = 60,
@@ -97,18 +99,16 @@ class TCN2Model(nn.Module):
             num_symbols: Maximum number of unique symbols for embedding
             loss_fn: Loss function to use
         """
-        super().__init__()
+        super().__init__( input_features, loss_fn=loss_fn)
         self.loss_fn = loss_fn if loss_fn is not None else nn.MSELoss()
 
         # Output projection
         self.fc = nn.Linear(hidden_dim, output_dim)
 
-        # Symbol embedding for conditioning
-        self.symbol_emb = nn.Embedding(num_symbols, hidden_dim)
 
         # TCN core
         self.tcn = TCN2Core(
-            input_dim=input_dim,
+            input_dim=len(input_features),
             hidden_dim=hidden_dim,
             seg_length=seg_length,
             num_layers=num_layers,
@@ -117,7 +117,6 @@ class TCN2Model(nn.Module):
             num_symbols=num_symbols,
         )
 
-        self.rev_in = RevIn(input_dim)
 
         self.hidden_dim = hidden_dim
         self.output_dim = output_dim
@@ -125,6 +124,7 @@ class TCN2Model(nn.Module):
     def forward(
         self,
         sources: torch.Tensor,
+        volumes: Optional[torch.Tensor] = None,
         labels: Optional[torch.Tensor] = None,
         symbols: Optional[torch.Tensor] = None
     ) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
@@ -140,21 +140,13 @@ class TCN2Model(nn.Module):
         """
         B, T, C = sources.shape
 
-        # Normalize input
-        src = self.rev_in(sources, mode='norm')
-
-        # Get symbol embeddings if provided
-        embed_symbols = self.symbol_emb(symbols) if symbols is not None else None
+        x = self.pre_forward(sources, volumes=volumes)
 
         # TCN forward pass
-        x = self.tcn(src, symbols=embed_symbols)  # (B, 1, hidden_dim)
+        x = self.tcn(x)  # (B, 1, hidden_dim)
 
         # Get prediction from hidden state
         x = self.fc(x)  # (B, 1, output_dim)
 
         # Calculate loss if target is provided
-        loss = None
-        if labels is not None:
-            loss = self.loss_fn(x, labels, self.rev_in)
-
-        return {"pred": x, "loss": loss}
+        return self.post_forward(x, labels)
