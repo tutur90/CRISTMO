@@ -21,7 +21,7 @@ type: mlp
 input_features: ["open", "high", "low", "close", "volume", "taker_buy_volume", "count"]
 hidden_dim: 128
 output_dim: 4
-num_layers: 3
+num_layers: 4
 dropout: 0.0
 conv_kernel: 5
 pool_kernel: 1

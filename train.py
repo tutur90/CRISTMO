@@ -126,9 +126,9 @@ def main():
     elif model_args.type == "mlp":
         model = MLPModel(**model_args.__dict__, loss_fn=loss_fn)
     elif model_args.type == "transformer":
-        model = TransformerModel(**model_args.__dict__, loss_fn=RelativeMSELoss())
+        model = TransformerModel(**model_args.__dict__, loss_fn=loss_fn)
     elif model_args.type == "transformer2":
-        model = Transformer2Model(**model_args.__dict__, loss_fn=RelativeMSELoss())
+        model = Transformer2Model(**model_args.__dict__, loss_fn=loss_fn)
     elif model_args.type == "tcn":
         model = TCNModel(**model_args.__dict__, loss_fn=loss_fn)
     elif model_args.type == "tcn2":

@@ -21,7 +21,7 @@ src_length: 24
 tgt_length: 1
 seg_length: 60
 type: transformer2
-input_features: ["open", "high", "low", "close", "volume"]
+input_features: ["open", "high", "low", "close", "volume", "taker_buy_volume", "count"]
 hidden_dim: 128
 output_dim: 4
 num_layers: 1
@@ -30,12 +30,13 @@ conv_kernel: 5
 pool_kernel: 1
 loss_function:
   type: rmspe
-  epsilon: 1e-8
+  epsilon: 1.e-6
   use_close: true
 
 # === Entraînement ===
 do_eval: true
 do_train: true
+do_predict: true
 per_device_train_batch_size: 2048
 per_device_eval_batch_size: 8192
 # total_batch_size: 8192

@@ -28,6 +28,8 @@ class TransformerModel(BaseModel):
     def __init__(self, input_features, hidden_dim=64, output_dim=3, seg_length=60, loss_fn=nn.MSELoss(), num_layers=6, norm=nn.LayerNorm, dropout=0.1, **kwargs):
         super().__init__(input_features, loss_fn=loss_fn)
         
+        print(self.loss_fn)
+        
         
         self.loss_fn = loss_fn
         

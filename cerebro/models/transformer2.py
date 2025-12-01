@@ -210,6 +210,7 @@ class TransformerCore(nn.Module):
             x = sources[:, -1:, :]
             
             for layer in self.transformer:
+                print(f"Transformer layer input shape: {x}")
                 x = layer(x, context=sources)
 
         else:

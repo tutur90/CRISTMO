@@ -96,6 +96,11 @@ class RMSPE(nn.Module):
             y_true = y_true[:, -1]  # (B, T)
             
         y_true, y_pred = y_true.exp(), y_pred.exp()
+        
+        
+        if num_items_in_batch is not None:
+            print(num_items_in_batch    )
+        
         loss = torch.sqrt(torch.mean(((y_true - y_pred) / (y_true + self.epsilon)) ** 2)) * 100
         return loss
 
