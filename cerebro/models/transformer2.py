@@ -127,10 +127,10 @@ class TransformerEncoderLayer(nn.Module):
             if context is not None:
                 x_q = self.norm1(x)
                 x_kv = self.norm1(context)
-                attn_out = self.attn(x_q, x_kv, x_kv, mask, return_attention)
+                attn_out = self.attn(x_q, x_kv, x_kv, mask,  need_weights=return_attention)
             else:
                 x = self.norm1(x)
-                attn_out = self.attn(x, x, x, mask, return_attention)
+                attn_out = self.attn(x, x, x, mask, need_weights=return_attention)
                 
             if return_attention:
                 attn_out, attn_weights = attn_out
@@ -139,11 +139,11 @@ class TransformerEncoderLayer(nn.Module):
         else:
             # Post-norm: norm after attention/ff
             if context is not None:
-                attn_out = self.attn(x, context, context, mask, return_attention)
+                attn_out, attn_weights = self.attn(x, context, context, mask, need_weights=return_attention)
             else:
-                attn_out = self.attn(x, x, x, mask, return_attention)
-            if return_attention:
-                attn_out, attn_weights = attn_out
+                attn_out, attn_weights = self.attn(x, x, x, mask, need_weights=return_attention)
+
+
             x = self.norm1(x + self.dropout1(attn_out))
             x = self.norm2(x + self.dropout2(self.ff(x)))
         
@@ -250,9 +250,6 @@ class TransformerModel(BaseModel):
 
     def forward(self, sources, volumes=None, labels=None, symbols=None, **kwargs):
         B, T, C = sources.shape
-
-        print(f"Input shape: {sources.shape}")
-        print(f"Volumes shape: {volumes.shape}" if volumes is not None else "No volumes provided")
 
         x = self.pre_forward(sources, volumes)
         
