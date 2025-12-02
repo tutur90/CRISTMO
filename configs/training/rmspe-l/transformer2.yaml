@@ -2,9 +2,9 @@
 
 run_name: transformer2
 
-wandb_project_name: "crypto-forecast-m"
+wandb_project_name: "crypto-forecast"
 
-output_dir: checkpoints/forecast/transformer2-m
+output_dir: checkpoints/forecast/transformer2
 overwrite_output_dir: true
 
 

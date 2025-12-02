@@ -15,7 +15,7 @@ start_date: "2020-01-01"
 
 # === Modèle ===
 
-src_length: 24
+src_length: 
 tgt_length: 1
 seg_length: 60
 type: lstm

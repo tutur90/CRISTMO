@@ -5,7 +5,7 @@ run_name: transformer
 output_dir: checkpoints/forecast/transformer
 overwrite_output_dir: true
 
-wandb_project_name: "crypto-forecast"
+wandb_project_name: "crypto-forecast-m"
 
 # === Données ===
 data_path: ../data/futures/dataset/
@@ -15,14 +15,14 @@ start_date: "2020-01-01"
 
 # === Modèle ===
 
-src_length: 8
+src_length: 24
 tgt_length: 1
 seg_length: 60
 type: transformer
 input_features: ["open", "high", "low", "close", "volume", "taker_buy_volume", "count"]
 hidden_dim: 128
 output_dim: 4
-num_layers: 1
+num_layers: 4
 dropout: 0.1  # Add dropout for regularization
 conv_kernel: 5
 pool_kernel: 1
@@ -47,7 +47,7 @@ eval_steps: 500
 eval_strategy: steps
 prediction_loss_only: false
 load_best_model_at_end: true
-metric_for_best_model: loss
+metric_for_best_model: score
 greater_is_better: false
 disable_tqdm: false
 

@@ -61,6 +61,15 @@ class ModelArguments:
     dilations: Optional[str] = field(
         default="1,2,4,8", metadata={"help": "Comma-separated list of dilation factors for TCN layers."}
     )
+    
+    
+    epsilon: float = field(
+        default=1e-6, metadata={"help": "Epsilon value for numerical stability in loss functions."}
+    )
+    
+    only_last: bool = field(
+        default=True, metadata={"help": "Whether to use only the last output for prediction."}
+    )
 
 
 @dataclass

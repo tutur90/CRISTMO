@@ -179,12 +179,14 @@ def main():
         
         results = {}
         
-        results['rmse'] = rmse_loss(out.predictions, out.label_ids)
-        results['mae'] = mae_loss(out.predictions, out.label_ids)
+        results['rmse'] = rmse_loss(out.predictions, out.label_ids, **model_args.loss_function)
+        results['mae'] = mae_loss(out.predictions, out.label_ids, **model_args.loss_function)
         
-        results["rmspe"] = rmspe_loss(out.predictions, out.label_ids)
+        results["rmspe"] = rmspe_loss(out.predictions, out.label_ids, **model_args.loss_function    )
         
         results["mape"] = mape_loss(out.predictions, out.label_ids)
+        
+        results['score'] = (results["rmspe"] + results["mape"]) / 2
         
         return results
 
@@ -224,7 +226,6 @@ def main():
         trainer.log_metrics("train", metrics)
         trainer.save_metrics("train", metrics)
         trainer.save_state()
-        
 
     
     if training_args.do_eval:

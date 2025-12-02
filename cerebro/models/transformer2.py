@@ -99,6 +99,7 @@ class TransformerEncoderLayer(nn.Module):
         dropout: float = 0.1,
         activation: str = "gelu",
         norm: Optional[nn.Module] = nn.LayerNorm,
+        epsilon: float = 1e-6,
         qv_bias: bool = False,
         pre_norm: bool = False
     ):
@@ -108,8 +109,8 @@ class TransformerEncoderLayer(nn.Module):
         self.attn = nn.MultiheadAttention(d_model, n_heads, dropout, add_bias_kv=qv_bias, batch_first=True)
         self.ff = FeedForward(d_model, d_ff, dropout, activation)
         
-        self.norm1 = norm(d_model) if norm else nn.Identity()
-        self.norm2 = norm(d_model) if norm else nn.Identity()
+        self.norm1 = norm(d_model, eps=epsilon) if norm else nn.Identity()
+        self.norm2 = norm(d_model, eps=epsilon) if norm else nn.Identity()
         
         self.dropout1 = nn.Dropout(dropout)
         self.dropout2 = nn.Dropout(dropout)
@@ -159,14 +160,12 @@ class TransformerCore(nn.Module):
         input_dim: int = 4, 
         hidden_dim: int = 64, 
         n_heads: int = 4,
-        activation: str = "relu",
-        norm: Optional[nn.Module] = nn.LayerNorm,
-        pre_norm: bool = True,
-        seg_length: int = 60, 
+        activation: str = "gelu",
+        norm: Optional[nn.Module] = RMSNorm,
+        pre_norm: bool = False,
         num_layers: int = 2,
-        conv_kernel: int = 5,
-        pool_kernel: int = 1,
         dropout: float = 0.0,
+        epsilon: float = 1e-6,
         only_last: bool = True,
         **kwargs
     ):
@@ -186,6 +185,8 @@ class TransformerCore(nn.Module):
         super().__init__()
         
         self.only_last = only_last
+        
+        print("TransformerCore only_last =", only_last)
 
         
         # Transformer layers
@@ -197,7 +198,8 @@ class TransformerCore(nn.Module):
                 dropout=dropout,
                 activation=activation,
                 norm=norm,
-                pre_norm=pre_norm
+                pre_norm=pre_norm,
+                epsilon=epsilon
             ) for _ in range(num_layers)
         ])
         
@@ -210,7 +212,6 @@ class TransformerCore(nn.Module):
             x = sources[:, -1:, :]
             
             for layer in self.transformer:
-                print(f"Transformer layer input shape: {x}")
                 x = layer(x, context=sources)
 
         else:
@@ -223,7 +224,7 @@ class TransformerCore(nn.Module):
         
 
 class TransformerModel(BaseModel):
-    def __init__(self, input_features, hidden_dim=64, output_dim=3, seg_length=60, loss_fn=nn.MSELoss(), num_layers=6, norm=nn.LayerNorm, dropout=0.1, n_heads=4, activation="relu", pre_norm=False, only_last=True, **kwargs):
+    def __init__(self, input_features, hidden_dim=64, output_dim=3, seg_length=60, loss_fn=nn.MSELoss(), num_layers=6, norm=RMSNorm, dropout=0.1, n_heads=4, activation="gelu", pre_norm=False, only_last=True, epsilon=1e-6, **kwargs):
         super().__init__(input_features)
         
         self.loss_fn = loss_fn
@@ -259,7 +260,7 @@ class TransformerModel(BaseModel):
         
         # if symbols is not None:
 
-        #     x = torch.cat([x, self.symbol_emb(symbols).unsqueeze(1)], dim=1)  
+        #     x = torch.cat([self.symbol_emb(symbols).unsqueeze(1), x], dim=1)  
 
         x = self.encoder(x)
 

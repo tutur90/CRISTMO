@@ -256,10 +256,11 @@ class CryptoDataset(Dataset):
             target_data = target_data[:, ].reshape(self.seg_length, -1, 4)
 
             result = np.array([
-                target_data[:, :, self.low_idx].min(axis=0),
-                target_data[:, :, self.high_idx].max(axis=0),
-                target_data[-1, :, self.close_idx],
                 target_data[0, :, self.open_idx],
+                target_data[:, :, self.high_idx].max(axis=0),
+                target_data[:, :, self.low_idx].min(axis=0),
+                target_data[-1, :, self.close_idx],
+
             ], dtype=np.float32)  # Always use float32 for targets
             result = result.T  # (T, 4)
         else:

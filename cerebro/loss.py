@@ -74,7 +74,7 @@ class RMSPE(nn.Module):
     """
     Mean Squared Percentage Error Loss
     """
-    def __init__(self, epsilon=1e-8, use_close=True, **kwargs):
+    def __init__(self, epsilon=1e-8, use_close=True, use_last=True, **kwargs):
         """
         Args:
             epsilon: small constant to avoid division by zero
@@ -82,6 +82,8 @@ class RMSPE(nn.Module):
         super(RMSPE, self).__init__()
         self.epsilon = epsilon
         self.use_close = use_close  
+        self.use_last = use_last
+        
     def forward(self, y_pred, y_true, num_items_in_batch: int= None):
         """
         Args:
@@ -92,14 +94,18 @@ class RMSPE(nn.Module):
             MSPE loss as percentage
         """
         if self.use_close:
-            y_pred = y_pred[:, -1]  # (B, T)
-            y_true = y_true[:, -1]  # (B, T)
+            y_pred = y_pred[:, :, -1]  # (B, T)
+            y_true = y_true[:, :, -1]  # (B, T)
+            
+        if self.use_last:
+            y_pred = y_pred[:, -1]  # (B,)
+            y_true = y_true[:, -1]  # (B,)
             
         y_true, y_pred = y_true.exp(), y_pred.exp()
         
         
         if num_items_in_batch is not None:
-            print(num_items_in_batch    )
+            print(num_items_in_batch)
         
         loss = torch.sqrt(torch.mean(((y_true - y_pred) / (y_true + self.epsilon)) ** 2)) * 100
         return loss
