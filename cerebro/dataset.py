@@ -253,7 +253,7 @@ class CryptoDataset(Dataset):
         if self.tgt_mode == "ohlc":
             # OHLC format
             
-            target_data = target_data[:, ].reshape(self.seg_length, -1, 4)
+            target_data = target_data.reshape(self.seg_length, -1, 4)
 
             result = np.array([
                 target_data[0, :, self.open_idx],
@@ -263,6 +263,10 @@ class CryptoDataset(Dataset):
 
             ], dtype=np.float32)  # Always use float32 for targets
             result = result.T  # (T, 4)
+        elif self.tgt_mode == "close":
+            # Close price only
+            target_data = target_data.reshape(self.seg_length, -1, 4)
+            result = target_data[:, :, self.close_idx].astype(np.float32)  # (T,)
         else:
             raise ValueError(f"Unsupported tgt_mode: {self.tgt_mode}")
 

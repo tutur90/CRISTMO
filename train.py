@@ -45,6 +45,8 @@ def main():
     else:
         model_args, data_args, training_args = parser.parse_args_into_dataclasses()
         
+    
+        
     os.environ["WANDB_PROJECT"]=data_args.wandb_project_name
 
     if data_args.total_batch_size is not None:
@@ -196,13 +198,17 @@ def main():
         return compute_forcast(out)
 
     # Initialize our Trainer
-    trainer = CustomTrainer(
+    trainer = Trainer(
         model=model,
         args=training_args,
         train_dataset=train_dataset if training_args.do_train else None,
         eval_dataset=eval_dataset if training_args.do_eval else None,
         compute_metrics=compute_metrics,
     )
+    
+    trainer.log(model_args.__dict__)
+    trainer.log(data_args.__dict__)
+    
     
     
     # Training

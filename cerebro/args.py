@@ -91,6 +91,10 @@ class DataTrainingArguments:
             )
         },
     )
+    
+    tgt_mode: str = field(
+        default="ohlc", metadata={"help": "Target mode for prediction (e.g., 'close', 'open')."}
+    )
 
     symbols: Optional[str] = field(
         default=None, metadata={"help": "List of symbols to include in the dataset."}
