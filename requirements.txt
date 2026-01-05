@@ -10,3 +10,4 @@ wandb
 transformers
 accelerate
 matplotlib
+pytorch-tcn

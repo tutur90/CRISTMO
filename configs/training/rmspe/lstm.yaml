@@ -5,7 +5,7 @@ run_name: lstm
 output_dir: checkpoints/forecast/lstm
 overwrite_output_dir: true
 
-wandb_project_name: "crypto-forecast"
+wandb_project_name: "crypto-forecast-m"
 
 # === Données ===
 data_path: ../data/futures/dataset/
@@ -16,7 +16,7 @@ start_date: "2020-01-01"
 # === Modèle ===
 
 
-src_length: 1
+src_length: 24
 tgt_length: 1
 seg_length: 60
 type: lstm

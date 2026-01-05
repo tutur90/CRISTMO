@@ -1,30 +1,36 @@
 
 
-run_name: tcn2
-
-output_dir: checkpoints/forecast/tcn2
-overwrite_output_dir: true
+run_name: transformer2
 
 wandb_project_name: "crypto-forecast-m"
 
+output_dir: checkpoints/forecast/transformer2-m
+overwrite_output_dir: true
+
+
+
 # === Données ===
 data_path: ../data/futures/dataset/
-symbols: "BTCUSDT"
+symbols: "BTCUSDT,ETHUSDT,LTCUSDT,XRPUSDT,BCHUSDT,EOSUSDT,BNBUSDT,ADAUSDT,DOTUSDT,LINKUSDT,XLMUSDT"
 tgt_symbol: "BTCUSDT"
 start_date: "2020-01-01"
 
 # === Modèle ===
 
-src_length: 2
+src_length: 24
 tgt_length: 1
 seg_length: 60
-type: tcn2
+type: transformer2
 input_features: ["open", "high", "low", "close", "volume", "taker_buy_volume", "count"]
-hidden_dim: 128
+hidden_dim: 256
+n_head: 8
 output_dim: 4
-num_layers: 5
-conv_kernel: 3
-dropout: 0.1
+num_layers: 6
+dropout: 0.5  # Add dropout for regularization
+conv_kernel: 5
+pool_kernel: 1
+epsilon: 1.
+only_last: true
 loss_function:
   type: rmspe
   epsilon: 1.e-6
@@ -35,16 +41,18 @@ do_eval: true
 do_train: true
 do_predict: true
 per_device_train_batch_size: 2048
-per_device_eval_batch_size: 4096
+per_device_eval_batch_size: 8192
+# total_batch_size: 8192
+# gradient_accumulation_steps: 16
 
 max_steps: 10000
-save_steps: 1000
+save_steps: 500
 eval_delay: 500
 eval_steps: 500
 eval_strategy: steps
 prediction_loss_only: false
 load_best_model_at_end: true
-metric_for_best_model: loss
+metric_for_best_model: score
 greater_is_better: false
 disable_tqdm: false
 
@@ -53,13 +61,18 @@ logging_steps: 100
 save_total_limit: 3
 report_to: ["wandb"]
 
-dataloader_num_workers: 16
+
+dataloader_num_workers: 7
 dataloader_drop_last: false
-dataloader_pin_memory: true
+dataloader_pin_memory : true
+
 
 learning_rate: 2.e-4
 lr_scheduler_type: cosine
 warmup_steps: 500
+# max_grad_norm: 2.0
+weight_decay: 0.01
+
 
 bf16: false
 fp16: true

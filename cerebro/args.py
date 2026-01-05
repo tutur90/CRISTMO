@@ -70,6 +70,10 @@ class ModelArguments:
     only_last: bool = field(
         default=True, metadata={"help": "Whether to use only the last output for prediction."}
     )
+    
+    n_head : int = field(
+        default=4, metadata={"help": "Number of attention heads for Transformer models."}
+    )
 
 
 @dataclass
