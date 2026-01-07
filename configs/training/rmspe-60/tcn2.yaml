@@ -5,13 +5,14 @@ run_name: tcn2
 output_dir: checkpoints/forecast/tcn2
 overwrite_output_dir: true
 
-wandb_project_name: "crypto-forecast"
+wandb_project_name: "crypto-forecast-60"
 
 # === Données ===
 data_path: ../data/futures/dataset/
 symbols: "BTCUSDT"
 tgt_symbol: "BTCUSDT"
 start_date: "2020-01-01"
+tgt_mode: "close"
 
 # === Modèle ===
 
@@ -21,14 +22,15 @@ seg_length: 60
 type: tcn2
 input_features: ["open", "high", "low", "close", "volume", "taker_buy_volume", "count"]
 hidden_dim: 128
-output_dim: 4
+output_dim: 60
 num_layers: 5
 conv_kernel: 3
 dropout: 0.1
 loss_function:
   type: rmspe
   epsilon: 1.e-6
-  use_close: true
+  use_close: false
+  use_last: false
 
 # === Entraînement ===
 do_eval: true

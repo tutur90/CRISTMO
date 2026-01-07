@@ -14,10 +14,11 @@ data_path: ../data/futures/dataset/
 symbols: "BTCUSDT,ETHUSDT,LTCUSDT,XRPUSDT,BCHUSDT,EOSUSDT,BNBUSDT,ADAUSDT,DOTUSDT,LINKUSDT,XLMUSDT"
 tgt_symbol: "BTCUSDT"
 start_date: "2020-01-01"
+tgt_mode: "close"
 
 # === Modèle ===
 
-src_length: 1
+src_length: 24
 tgt_length: 1
 seg_length: 60
 type: transformer2
@@ -25,7 +26,7 @@ input_features: ["open", "high", "low", "close", "volume", "taker_buy_volume", "
 hidden_dim: 128
 output_dim: 60
 num_layers: 4
-dropout: 0.3  # Add dropout for regularization
+dropout: 0.4  # Add dropout for regularization
 conv_kernel: 5
 pool_kernel: 1
 epsilon: 1.
@@ -34,12 +35,13 @@ loss_function:
   type: rmspe
   epsilon: 1.e-6
   use_close: false
+  use_last: false
 
 # === Entraînement ===
 do_eval: true
 do_train: true
 do_predict: true
-per_device_train_batch_size: 2048
+per_device_train_batch_size: 1024
 per_device_eval_batch_size: 8192
 # total_batch_size: 8192
 # gradient_accumulation_steps: 16

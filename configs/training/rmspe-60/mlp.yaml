@@ -21,7 +21,7 @@ seg_length: 60
 type: mlp
 input_features: ["open", "high", "low", "close", "volume", "taker_buy_volume", "count"]
 hidden_dim: 128
-output_dim: 4
+output_dim: 60
 num_layers: 4
 dropout: 0.3
 conv_kernel: 5
@@ -30,6 +30,7 @@ loss_function:
   type: rmspe
   epsilon: 1.e-6
   use_close: false
+  use_last: false
 
 # === Entraînement ===
 do_eval: true
