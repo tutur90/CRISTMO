@@ -178,16 +178,22 @@ def main():
     def compute_returns(out):   
         
         import numpy as np
+        
+        multiplicative_factor = 60 * 24 * 364
 
         
         metric = InvMetric(**model_args.loss_function)
         
         results = metric(out.inputs, out.predictions, out.label_ids)
-        
         log_pnl_std = np.std(np.exp(results["log_pnl"]))
         
-        return {"pnl": np.exp(results["mean_log_pnl"]), "pnl_std": log_pnl_std, "log_pnl": results["mean_log_pnl"]}
+        lp_0 = results["log_pnl"][:, 0].mean() * multiplicative_factor
+        lp_14 = results["log_pnl"][:, 14].mean() * multiplicative_factor
+        lp_29 = results["log_pnl"][:, 29].mean() * multiplicative_factor
+        lp_44 = results["log_pnl"][:, 44].mean() * multiplicative_factor
+        lp_59 = results["log_pnl"][:, 59].mean() * multiplicative_factor
 
+        return {"log_pnl": results["log_pnl"].mean() * multiplicative_factor, "log_pnl_std": log_pnl_std * np.sqrt(multiplicative_factor), "lp_0": lp_0, "lp_14": lp_14, "lp_29": lp_29, "lp_44": lp_44, "lp_59": lp_59}
         
     def compute_metrics(out):
         

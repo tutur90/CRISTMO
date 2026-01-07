@@ -152,11 +152,11 @@ class BasicInvLoss(torch.nn.Module):
         inv = output["pred"].squeeze() * leverage
 
         ret = target.squeeze().exp() / output["last"].exp().reshape(-1, 1)  # (B, T)
+        
+        pnl = inv * (ret - 1) + 1 - self.fee*inv.abs()  # (B, T)
+        log_pnl = torch.log(pnl.clamp(min=1e-12)) / torch.arange(1, pnl.shape[1]+1, device=pnl.device).float().reshape(1, -1)
 
-        pnl = inv * (ret.exp() - 1) + 1 - self.fee*inv.abs()  # (B, T)
-        log_pnl = torch.log(pnl.clamp(min=1e-8))
-
-        return -log_pnl.mean() * 24 * 364  # minimize negative log-pnl
+        return -log_pnl.mean() * 60 * 24 * 364  # minimize negative log-pnl
     
     def post_forward(self, predictions, rev_in: RevIn):
 
