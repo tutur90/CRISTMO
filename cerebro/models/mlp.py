@@ -165,6 +165,7 @@ class MLPModel(BaseModel):
             - predictions: Shape (B, 1, output_dim)
             - loss: Scalar loss value (None if tgt is not provided)
         """
+        
         B, T, C = sources.shape
 
         # Normalize input
@@ -178,7 +179,9 @@ class MLPModel(BaseModel):
         
         if not self.training and self.static:
             x = torch.zeros(B, 1, self.output_dim, device=x.device)
+            
+        out = self.post_forward(x, labels)
 
         # Calculate loss if target is provided
-        return self.post_forward(x, labels)
+        return out
 

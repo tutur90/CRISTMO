@@ -1,290 +1,242 @@
 import torch
 import torch.nn as nn  
 from torch.utils.data import DataLoader
-from typing import Dict
+from typing import Dict, Optional
 from pathlib import Path
 from tqdm import tqdm
 import os
 import numpy as np
-import random
-import logging
-import wandb
 
-class Trainer:
-    """Enhanced trainer with step-based evaluation and checkpointing."""
+import time
+import torch
 
-    def __init__(self, model: nn.Module, config: Dict, device: torch.device):
-        self.model = model
-        self.config = config
-        self.device = device
-        self.global_step = 0
-        self.best_val_loss = float('inf')
-        
-        # Setup logging
-        self.setup_logging()
-        
-        # Create checkpoint directory
-        self.checkpoint_dir = Path(config["logger"]["save_dir"]) / config["logger"]["name"] / "checkpoints"
-        self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
+from transformers.trainer import Trainer, TrainingArguments, logger
+from transformers.trainer_utils import EvalLoopOutput, EvalPrediction, has_length, denumpify_detensorize
+from transformers.trainer_pt_utils import find_batch_size, EvalLoopContainer, IterableDatasetShard
+from transformers.integrations.deepspeed import deepspeed_init
+from transformers.data.data_collator import DataCollator
+from transformers.trainer_utils import is_torch_xla_available
+from transformers.utils import logging as hf_logging    
 
-        self.optimizer = torch.optim.Adam(
-            self.model.parameters(), 
-            lr=config["model"]["lr"],
-            weight_decay=config["model"].get("weight_decay", 0.0)
-        )
-        
-        scheduler_config = config["model"].get("scheduler", None)
-        if scheduler_config:
-            if scheduler_config["type"] == "ReduceLROnPlateau":
-                self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-                    self.optimizer,
-                    mode='min',
-                    factor=scheduler_config.get("factor", 0.5),
-                    patience=scheduler_config.get("patience", 5)
-                )
-            else:
-                raise ValueError(f"Unsupported scheduler type: {scheduler_config['type']}")
-        else:
-            self.scheduler = None
 
-        # Early stopping
-        self.early_stopping_patience = config["trainer"].get("early_stopping_patience", None)
-        self.epochs_without_improvement = 0
-        
-        # Step-based evaluation interval
-        self.eval_every_n_steps = config["trainer"].get("eval_every_n_steps", 100)
-        self.log_every_n_steps = config["trainer"].get("log_every_n_steps", 10)
+class CustomTrainer(Trainer):
+    """
+    Custom Trainer to handle our specific model outputs.
+    """
 
-        # Gradient clipping
-        self.grad_clip = config["trainer"].get("grad_clip", None)
-        
-    def setup_logging(self):
-        """Setup logging configuration."""
-        log_dir = Path(self.config["logger"]["save_dir"])
-        log_dir.mkdir(parents=True, exist_ok=True)
-        
-        logging.basicConfig(
-            level=logging.INFO,
-            format='%(asctime)s - %(levelname)s - %(message)s',
-            handlers=[
-                logging.FileHandler(log_dir / 'training.log'),
-                logging.StreamHandler()
-            ]
-        )
-        self.logger = logging.getLogger(__name__)
-    
-    def train_epoch(self, dataloader: DataLoader, epoch: int) -> float:
-        """Train for one epoch with step-based evaluation."""
-        self.model.train()
-        epoch_loss = 0
-        epoch_steps = 0
-        
-        pbar = tqdm(dataloader, desc=f"Epoch {epoch+1}", leave=True)
 
-        for batch_idx, (batch) in enumerate(pbar):
-            
-            batch = {k: v.to(self.device) for k, v in batch.items()}
+    def evaluation_loop(
+        self,
+        dataloader: DataLoader,
+        description: str,
+        prediction_loss_only: Optional[bool] = None,
+        ignore_keys: Optional[list[str]] = None,
+        metric_key_prefix: str = "eval",
+    ) -> EvalLoopOutput:
+        """
+        Prediction/evaluation loop, shared by `Trainer.evaluate()` and `Trainer.predict()`.
 
-            
-            # Forward pass
-            self.optimizer.zero_grad()
-            outputs = self.model(**batch)
-            
-            
-            loss = outputs["loss"]
-            
-            # Backward pass
-            loss.backward()
-            
-            # Gradient clipping
-            if self.grad_clip:
-                torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.grad_clip)
-            
-            self.optimizer.step()
-            
-            # Update metrics
-            batch_loss = loss.item()
-            epoch_loss += batch_loss
-            epoch_steps += 1
-            self.global_step += 1
-            
-            # Log training metrics
-            if self.global_step % self.log_every_n_steps == 0:
-                wandb.log({
-                    "train/loss_step": batch_loss,
-                    "train/loss": epoch_loss / epoch_steps,
-                    "train/learning_rate": self.optimizer.param_groups[0]['lr'],
-                }, step=self.global_step)
-            
-            # Step-based evaluation
-            if self.global_step % self.eval_every_n_steps == 0:
-                val_loss, mae, mse = self.evaluate(self.val_loader, "val")
-                self.logger.info(f"Step {self.global_step} - Val Loss: {val_loss:.4E} - MAE: {mae:.4E} - MSE: {mse:.4E}")
+        Works both with or without labels.
+        """
+        args = self.args
 
-                # Save best model
-                if val_loss < self.best_val_loss:
-                    self.best_val_loss = val_loss
-                    self.save_checkpoint("best_model.pt", val_loss)
-                    self.epochs_without_improvement = 0
-                else:
-                    self.epochs_without_improvement += 1
-                
-                self.model.train()  # Return to training mode
-            
-            # Update progress bar
-            pbar.set_postfix({
-                'loss_step': f'{batch_loss:.2E}',
-                'loss': f'{epoch_loss/epoch_steps:.2E}',
-                'step': self.global_step
-            })
-        
-        return epoch_loss / epoch_steps
-    
-    def evaluate(self, dataloader: DataLoader, stage: str = "val") -> float:
-        """Evaluate the model."""
-        self.model.eval()
-        total_loss = 0
-        num_batches = 0
-        
-        all_predictions = []
-        all_targets = []
-        
-        with torch.no_grad():
-            for batch in tqdm(dataloader, desc=f"Eval ({stage})", leave=False):
-                batch = {k: v.to(self.device) for k, v in batch.items()}
+        prediction_loss_only = prediction_loss_only if prediction_loss_only is not None else args.prediction_loss_only
 
-                outputs, loss = self.model(**batch)
+        # if eval is called w/o train, handle model prep here
+        if self.is_deepspeed_enabled and self.deepspeed is None:
+            _, _ = deepspeed_init(self, num_training_steps=0, inference=True)
 
-                total_loss += loss.item()
-                num_batches += 1
-                
-                # Collect predictions for analysis
-                all_predictions.append(outputs.cpu().flatten())
-                all_targets.append(batch["tgt"].cpu().flatten())
+        model = self._wrap_model(self.model, training=False, dataloader=dataloader)
 
-        avg_loss = total_loss / num_batches
-        
-        # Additional metrics
-        if stage == "val":
-            predictions = torch.cat(all_predictions, dim=0)
-            targets = torch.cat(all_targets, dim=0)
-            
-            # Calculate additional metrics
-            mae = torch.mean(torch.abs(predictions - targets)).item()
-            mse = torch.mean((predictions - targets) ** 2).item()
-            
-            # Log to wandb
-            wandb.log({
-                f"{stage}/loss": avg_loss,
-                f"{stage}/mae": mae,
-                f"{stage}/mse": mse,
-                "global_step": self.global_step
-            }, step=self.global_step)
-            
-            return avg_loss, mae, mse
-        
-        # Log to wandb for test
-        wandb.log({
-            f"{stage}/loss": avg_loss,
-            "global_step": self.global_step
-        }, step=self.global_step)
-        
-        return avg_loss
-    
-    def save_checkpoint(self, filename: str, val_loss: float):
-        """Save model checkpoint."""
-        checkpoint = {
-            'epoch': self.current_epoch,
-            'global_step': self.global_step,
-            'model_state_dict': self.model.state_dict(),
-            'optimizer_state_dict': self.optimizer.state_dict(),
-            'val_loss': val_loss,
-            'best_val_loss': self.best_val_loss,
-            'config': self.config
-        }
-        
-        if self.scheduler:
-            checkpoint['scheduler_state_dict'] = self.scheduler.state_dict()
-        
-        checkpoint_path = self.checkpoint_dir / filename
-        torch.save(checkpoint, checkpoint_path)
-        self.logger.info(f"Checkpoint saved: {checkpoint_path}")
-        
-        # Save checkpoint as wandb artifact
-        artifact = wandb.Artifact(
-            name=f"model-{wandb.run.id}",
-            type="model",
-            description=f"Model checkpoint at step {self.global_step}"
-        )
-        artifact.add_file(str(checkpoint_path))
-        wandb.log_artifact(artifact)
-    
-    def load_checkpoint(self, checkpoint_path: str):
-        """Load model checkpoint."""
-        checkpoint = torch.load(checkpoint_path, map_location=self.device)
-        
-        self.model.load_state_dict(checkpoint['model_state_dict'])
-        self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-        self.global_step = checkpoint['global_step']
-        self.best_val_loss = checkpoint['best_val_loss']
-        
-        if self.scheduler and 'scheduler_state_dict' in checkpoint:
-            self.scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
-        
-        self.logger.info(f"Checkpoint loaded from {checkpoint_path}")
-        return checkpoint['epoch']
-    
-    def fit(self, train_loader: DataLoader, val_loader: DataLoader):
-        """Main training loop."""
-        self.val_loader = val_loader
-        max_epochs = self.config["trainer"]["max_epochs"]
-        
-        self.logger.info("="*50)
-        self.logger.info("Starting Training")
-        self.logger.info(f"Device: {self.device}")
-        self.logger.info(f"Max Epochs: {max_epochs}")
-        self.logger.info(f"Eval Every: {self.eval_every_n_steps} steps")
-        self.logger.info("="*50)
-        
-        for epoch in range(max_epochs):
-            self.current_epoch = epoch
-            
-            # Train
-            train_loss = self.train_epoch(train_loader, epoch)
-            
-            # Evaluate
-            val_loss, mae, mse = self.evaluate(val_loader, "val")
-            
-            # Log epoch metrics
-            wandb.log({
-                "epoch": epoch,
-                "train/loss": train_loss,
-                "val/loss": val_loss,
-                "val/mae": mae,
-                "val/mse": mse,
-                "best_val_loss": self.best_val_loss
-            }, step=self.global_step)
-
-            self.logger.info(
-                f"Epoch {epoch+1}/{max_epochs} - "
-                f"Train Loss: {train_loss:.4E} - "
-                f"Val Loss: {val_loss:.4E} - "
-                f"Best Val Loss: {self.best_val_loss:.4E}"
+        if len(self.accelerator._models) == 0 and model is self.model:
+            start_time = time.time()
+            model = (
+                self.accelerator.prepare(model)
+                if self.is_deepspeed_enabled
+                or (self.is_fsdp_enabled and self.accelerator.mixed_precision != "fp8" and not self.args.torch_compile)
+                else self.accelerator.prepare_model(model, evaluation_mode=True)
             )
-            
-            # Learning rate scheduling
-            if self.scheduler:
-                self.scheduler.step(val_loss)
-            
-            # Save periodic checkpoint
-            if (epoch + 1) % self.config["trainer"].get("save_every_n_epochs", 10) == 0:
-                self.save_checkpoint(f"checkpoint_epoch_{epoch+1}.pt", val_loss)
-            
-            # Early stopping
-            if self.early_stopping_patience:
-                if self.epochs_without_improvement >= self.early_stopping_patience:
-                    self.logger.info(f"Early stopping triggered after {epoch+1} epochs")
-                    break
-        
-        self.logger.info("Training completed!")
-        return self.best_val_loss
+            self.model_preparation_time = round(time.time() - start_time, 4)
+
+            if self.is_fsdp_enabled:
+                self.model = model
+
+            # for the rest of this function `model` is the outside model, whether it was wrapped or not
+            if model is not self.model:
+                self.model_wrapped = model
+
+            # backward compatibility
+            if self.is_deepspeed_enabled:
+                self.deepspeed = self.model_wrapped
+
+        # if full fp16 or bf16 eval is wanted and this ``evaluation`` or ``predict`` isn't called
+        # while ``train`` is running, cast it to the right dtype first and then put on device
+        if not self.is_in_train:
+            if args.fp16_full_eval:
+                model = model.to(dtype=torch.float16, device=args.device)
+            elif args.bf16_full_eval:
+                model = model.to(dtype=torch.bfloat16, device=args.device)
+
+        batch_size = self.args.eval_batch_size
+
+        logger.info(f"\n***** Running {description} *****")
+        if has_length(dataloader):
+            logger.info(f"  Num examples = {self.num_examples(dataloader)}")
+        else:
+            logger.info("  Num examples: Unknown")
+        logger.info(f"  Batch size = {batch_size}")
+
+        if hasattr(model, "eval") and callable(model.eval):
+            model.eval()
+        if hasattr(self.optimizer, "eval") and callable(self.optimizer.eval):
+            self.optimizer.eval()
+
+        self.callback_handler.eval_dataloader = dataloader
+        # Do this before wrapping.
+        eval_dataset = getattr(dataloader, "dataset", None)
+
+        if args.past_index >= 0:
+            self._past = None
+
+        # Initialize containers
+        all_losses = EvalLoopContainer(self.args.eval_do_concat_batches, padding_index=-100)
+        all_preds = EvalLoopContainer(self.args.eval_do_concat_batches, padding_index=-100)
+        all_labels = EvalLoopContainer(self.args.eval_do_concat_batches, padding_index=-100)
+        all_inputs = EvalLoopContainer(self.args.eval_do_concat_batches, padding_index=-100)
+
+        metrics = None
+        eval_set_kwargs = {}
+
+        # Will be useful when we have an iterable dataset so don't know its length.
+        observed_num_examples = 0
+
+        # Main evaluation loop
+        for step, inputs in enumerate(dataloader):
+            # Update the observed num examples
+            observed_batch_size = find_batch_size(inputs)
+            if observed_batch_size is not None:
+                observed_num_examples += observed_batch_size
+                # For batch samplers, batch_size is not known by the dataloader in advance.
+                if batch_size is None:
+                    batch_size = observed_batch_size
+
+            # Prediction step
+            losses, logits, labels = self.prediction_step(model, inputs, prediction_loss_only, ignore_keys=ignore_keys)
+            main_input_name = getattr(self.model, "main_input_name", "input_ids")
+            inputs_decode = (
+                self._prepare_input(inputs) if "inputs" in args.include_for_metrics else None
+            )
+
+            # if is_torch_xla_available():
+            #     xm.mark_step()
+
+            # Update containers
+            if losses is not None:
+                losses = self.gather_function(losses.repeat(batch_size))
+                all_losses.add(losses)
+            if inputs_decode is not None:
+                inputs_decode = self.accelerator.pad_across_processes(inputs_decode, dim=1, pad_index=-100)
+                inputs_decode = self.gather_function(inputs_decode)
+                if not self.args.batch_eval_metrics or description == "Prediction":
+                    all_inputs.add(inputs_decode)
+            if labels is not None:
+                # Pad labels here, preparing for preprocess_logits_for_metrics in next logits block.
+                labels = self.accelerator.pad_across_processes(labels, dim=1, pad_index=-100)
+            if logits is not None:
+                logits = self.accelerator.pad_across_processes(logits, dim=1, pad_index=-100)
+                if self.preprocess_logits_for_metrics is not None:
+                    logits = self.preprocess_logits_for_metrics(logits, labels)
+                logits = self.gather_function(logits)
+                if not self.args.batch_eval_metrics or description == "Prediction":
+                    all_preds.add(logits)
+            if labels is not None:
+                labels = self.gather_function(labels)
+                if not self.args.batch_eval_metrics or description == "Prediction":
+                    all_labels.add(labels)
+
+            self.control = self.callback_handler.on_prediction_step(args, self.state, self.control)
+
+            if self.args.batch_eval_metrics:
+                if self.compute_metrics is not None and logits is not None and labels is not None:
+                    is_last_step = self.accelerator.gradient_state.end_of_dataloader
+                    batch_kwargs = {}
+                    batch_kwargs["losses"] = losses if "loss" in args.include_for_metrics else None
+                    batch_kwargs["inputs"] = inputs if "inputs" in args.include_for_metrics else None
+                    metrics = self.compute_metrics(
+                        EvalPrediction(predictions=logits, label_ids=labels, **batch_kwargs),
+                        compute_result=is_last_step,
+                    )
+
+                del losses, logits, labels, inputs
+                torch.cuda.empty_cache()
+
+            # Gather all tensors and put them back on the CPU if we have done enough accumulation steps.
+            elif args.eval_accumulation_steps is not None and (step + 1) % args.eval_accumulation_steps == 0:
+                all_losses.to_cpu_and_numpy()
+                all_preds.to_cpu_and_numpy()
+                all_labels.to_cpu_and_numpy()
+                all_inputs.to_cpu_and_numpy()
+
+                del losses, logits, labels, inputs
+                torch.cuda.empty_cache()
+
+        # After all calls to `.gather_function`, reset to `gather_for_metrics`:
+        self.gather_function = self.accelerator.gather_for_metrics
+        if args.past_index and hasattr(self, "_past"):
+            # Clean the state at the end of the evaluation loop
+            delattr(self, "_past")
+
+        # Gather all remaining tensors and put them back on the CPU
+        all_losses = all_losses.get_arrays()
+        all_preds = all_preds.get_arrays()
+        all_labels = all_labels.get_arrays()
+        all_inputs = all_inputs.get_arrays()
+
+        # Number of samples
+        if has_length(eval_dataset):
+            num_samples = len(eval_dataset)
+        # The instance check is weird and does not actually check for the type, but whether the dataset has the right
+        # methods. Therefore we need to make sure it also has the attribute.
+        elif isinstance(eval_dataset, IterableDatasetShard) and getattr(eval_dataset, "num_examples", 0) > 0:
+            num_samples = eval_dataset.num_examples
+        else:
+            if has_length(dataloader):
+                num_samples = self.num_examples(dataloader)
+            else:  # both len(dataloader.dataset) and len(dataloader) fail
+                num_samples = observed_num_examples
+        if num_samples == 0 and observed_num_examples > 0:
+            num_samples = observed_num_examples
+
+        # Metrics!
+        if (
+            self.compute_metrics is not None
+            and all_preds is not None
+            and all_labels is not None
+            and not self.args.batch_eval_metrics
+        ):
+            eval_set_kwargs["losses"] = all_losses if "loss" in args.include_for_metrics else None
+            eval_set_kwargs["inputs"] = all_inputs if "inputs" in args.include_for_metrics else None
+            metrics = self.compute_metrics(
+                EvalPrediction(predictions=all_preds, label_ids=all_labels, **eval_set_kwargs)
+            )
+        elif metrics is None:
+            metrics = {}
+
+        # To be JSON-serializable, we need to remove numpy types or zero-d tensors
+        metrics = denumpify_detensorize(metrics)
+
+        if isinstance(all_losses, list) and all_losses:
+            metrics[f"{metric_key_prefix}_loss"] = np.concatenate(all_losses).mean().item()
+        elif isinstance(all_losses, np.ndarray):
+            metrics[f"{metric_key_prefix}_loss"] = all_losses.mean().item()
+        if hasattr(self, "jit_compilation_time"):
+            metrics[f"{metric_key_prefix}_jit_compilation_time"] = self.jit_compilation_time
+        if hasattr(self, "model_preparation_time"):
+            metrics[f"{metric_key_prefix}_model_preparation_time"] = self.model_preparation_time
+
+        # Prefix all keys with metric_key_prefix + '_'
+        for key in list(metrics.keys()):
+            if not key.startswith(f"{metric_key_prefix}_"):
+                metrics[f"{metric_key_prefix}_{key}"] = metrics.pop(key)
+
+        return EvalLoopOutput(predictions=all_preds, label_ids=all_labels, metrics=metrics, num_samples=num_samples)

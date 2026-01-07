@@ -15,6 +15,36 @@ class Loss(torch.nn.Module):
         pnl = torch.log(pnl.clamp(min=1e-8))
         pnl = pnl.mean()
         return -pnl # minimize negative log-likelihood
+    
+class BaseForecastLoss(torch.nn.Module):
+    def __init__(self, use_close=True, use_last=True, **kwargs):
+        super().__init__()
+        self.use_close = use_close
+        self.use_last = use_last
+
+    def forward(self, out, y_true, num_items_in_batch: int= None):
+        
+        y_pred = out["pred"]
+        
+        if self.use_close:
+            y_pred = y_pred[:, :, -1]  # (B, T)
+            y_true = y_true[:, :, -1]  # (B, T)
+            
+        if self.use_last:
+            y_pred = y_pred[:, -1]  # (B,)
+            y_true = y_true[:, -1]  # (B,)   
+            
+        y_pred, y_true = y_pred.squeeze().exp(), y_true.squeeze().exp() 
+            
+        return self._forward(y_pred, y_true, num_items_in_batch=num_items_in_batch)
+    
+    def _forward(self, y_pred, y_true, num_items_in_batch: int= None):
+        raise NotImplementedError()
+        
+    
+    def post_forward(self, predictions, rev_in: RevIn):
+        denorm_preds = rev_in(predictions, mode='denorm')
+        return {"pred": denorm_preds}
 
 
 class RelativeMSELoss(nn.Module):
@@ -36,20 +66,21 @@ class RelativeMSELoss(nn.Module):
         return nn.functional.mse_loss(y_pred, y_true)
 
 
-class MAPE(nn.Module):
+class MAPE(BaseForecastLoss):
     """
     Mean Absolute Percentage Error Loss
     """
-    def __init__(self, epsilon=1e-8, use_close=True, **kwargs):
+    def __init__(self, epsilon=1e-8, use_close=True, use_last=True, **kwargs):
         """
         Args:
             epsilon: small constant to avoid division by zero
         """
-        super(MAPE, self).__init__()
+        super(MAPE, self).__init__(use_close=use_close, use_last=use_last, **kwargs)
         self.epsilon = epsilon
         self.use_close = use_close
+        self.use_last = use_last
 
-    def forward(self, y_pred, y_true,  num_items_in_batch: int= None):
+    def _forward(self, y_pred, y_true,  num_items_in_batch: int= None):
         
         """
         Args:
@@ -59,18 +90,11 @@ class MAPE(nn.Module):
         Returns:
             MAPE loss as percentage
         """
-        
-        
-        if self.use_close:
-            y_pred = y_pred[:, -1]  # (B, T)
-            y_true = y_true[:, -1]  # (B, T)
-            
-        y_true, y_pred = y_true.exp(), y_pred.exp()
         # Add epsilon to avoid division by zero
         loss = torch.mean(torch.abs((y_true - y_pred) / (y_true + self.epsilon))) * 100
         return loss
     
-class RMSPE(nn.Module):
+class RMSPE(BaseForecastLoss):  
     """
     Mean Squared Percentage Error Loss
     """
@@ -79,12 +103,12 @@ class RMSPE(nn.Module):
         Args:
             epsilon: small constant to avoid division by zero
         """
-        super(RMSPE, self).__init__()
+        super(RMSPE, self).__init__(use_close=use_close, use_last=use_last, **kwargs)
         self.epsilon = epsilon
         self.use_close = use_close  
         self.use_last = use_last
         
-    def forward(self, y_pred, y_true, num_items_in_batch: int= None):
+    def _forward(self, y_pred, y_true, num_items_in_batch: int= None):
         """
         Args:
             y_pred: predicted values (tensor)
@@ -93,20 +117,7 @@ class RMSPE(nn.Module):
         Returns:
             MSPE loss as percentage
         """
-        if self.use_close:
-            y_pred = y_pred[:, :, -1]  # (B, T)
-            y_true = y_true[:, :, -1]  # (B, T)
-            
-        if self.use_last:
-            y_pred = y_pred[:, -1]  # (B,)
-            y_true = y_true[:, -1]  # (B,)
-            
-        y_true, y_pred = y_true.exp(), y_pred.exp()
-        
-        
-        if num_items_in_batch is not None:
-            print(num_items_in_batch)
-        
+
         loss = torch.sqrt(torch.mean(((y_true - y_pred) / (y_true + self.epsilon)) ** 2)) * 100
         return loss
 
@@ -114,16 +125,30 @@ class RMSPE(nn.Module):
 
 
 class BasicInvLoss(torch.nn.Module):
-    def __init__(self):
+    def __init__(self, leverage=1.0, fee=0.01, **kwargs):
         super().__init__()
+        self.leverage = leverage
+        self.fee = fee/100
 
-    def forward(self, output: torch.Tensor, target: torch.Tensor, rev_in: RevIn, leverage=1, num_items_in_batch: int= None) -> torch.Tensor:
-        ret = target[:, 2] - rev_in.last.squeeze()  # (B, T)
-        inv = torch.tanh(output.mean(dim=-1).squeeze()) * leverage
-        pnl = inv * (ret.exp() - 1) + 1  # (B, T)
+    def forward(self, output: torch.Tensor, target: torch.Tensor, leverage=None, num_items_in_batch: int= None) -> torch.Tensor:
+        if leverage is None:
+            leverage = self.leverage
+            
+            
+        inv = output["pred"].squeeze() * leverage
+
+        ret = target.squeeze().exp() / output["last"].exp().reshape(-1, 1)  # (B, T)
+
+        pnl = inv * (ret.exp() - 1) + 1 - self.fee*inv.abs()  # (B, T)
         log_pnl = torch.log(pnl.clamp(min=1e-8))
 
         return -log_pnl.mean() * 24 * 364  # minimize negative log-pnl
+    
+    def post_forward(self, predictions, rev_in: RevIn):
+
+        predictions = predictions.tanh()
+        
+        return {"pred": predictions, "last": rev_in.last, "scale": rev_in.scale}
     
     
 class InvLoss(torch.nn.Module):

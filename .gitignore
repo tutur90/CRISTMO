@@ -8,3 +8,5 @@ data/*
 .cache/
 checkpoints/
 wandb
+**/.DS_Store
+**/.pytest_cache/

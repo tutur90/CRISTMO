@@ -31,9 +31,8 @@ class BaseModel(nn.Module):
         return x
     
     def post_forward(self, x, labels=None):
-        loss = None
+        output = self.loss_fn.post_forward(x, rev_in=self.rev_in)
         if labels is not None:
-            x = self.rev_in(x, mode='denorm')
-            loss = self.loss_fn(x, labels)
-        return {"pred": x, "loss": loss}
+            output["loss"] = self.loss_fn(output, labels)
+        return output
     

@@ -17,17 +17,31 @@ from cerebro.models.transformer2 import TransformerModel as Transformer2Model
 from cerebro.models.tcn import TCNModel
 from cerebro.models.tcn2 import TCN2Model
 from cerebro.dataset import CryptoDataset
+from cerebro.trainer import CustomTrainer
 
-from cerebro.utils import rmspe_loss, mape_loss, mae_loss, rmse_loss
+from cerebro.utils import MultiForecastMetric, InvMetric
 
 logger = logging.getLogger(__name__)
 
-class CustomTrainer(Trainer):
-    """
-    Custom Trainer to handle our specific model outputs.
-    """
+
     
-    
+
+models_dict = {
+    "lstm": LSTMModel,
+    "mlp": MLPModel,
+    "transformer": TransformerModel,
+    "transformer2": Transformer2Model,
+    "tcn": TCNModel,
+    "tcn2": TCN2Model
+}    
+
+losses_dict = {
+    "relative_mse": RelativeMSELoss,
+    "inv": BasicInvLoss,
+    "inv_order": InvLoss,
+    "mape": MAPE,
+    "rmspe": RMSPE
+}
 
 def main():
 
@@ -98,46 +112,20 @@ def main():
     # Load datasets
     
     if training_args.do_train:
-
         train_dataset = CryptoDataset(**data_args.__dict__, **model_args.__dict__, split="train")
 
     if training_args.do_eval:
         eval_dataset = CryptoDataset(**data_args.__dict__, **model_args.__dict__, split="val")
-
-    if model_args.loss_function["type"] == "relative_mse":
-
-        loss_fn = RelativeMSELoss()
-
-    elif model_args.loss_function["type"] == "basic_inv":
-        loss_fn = BasicInvLoss()
-    elif model_args.loss_function["type"] == "inv":
-
-        loss_fn = InvLoss(**model_args.loss_function)
-
-    elif model_args.loss_function["type"] == "mape":
-        loss_fn = MAPE(**model_args.loss_function)
-
-    elif model_args.loss_function["type"] == "rmspe":
-        loss_fn = RMSPE(**model_args.loss_function)
-
-    else:
-        raise ValueError(f"Unknown loss function: {model_args.loss_function}")
-
-    if model_args.type == "lstm":
-        model = LSTMModel(**model_args.__dict__, loss_fn=loss_fn)
-    elif model_args.type == "mlp":
-        model = MLPModel(**model_args.__dict__, loss_fn=loss_fn)
-    elif model_args.type == "transformer":
-        model = TransformerModel(**model_args.__dict__, loss_fn=loss_fn)
-    elif model_args.type == "transformer2":
-        model = Transformer2Model(**model_args.__dict__, loss_fn=loss_fn)
-    elif model_args.type == "tcn":
-        model = TCNModel(**model_args.__dict__, loss_fn=loss_fn)
-    elif model_args.type == "tcn2":
-        model = TCN2Model(**model_args.__dict__, loss_fn=loss_fn)
-    else:
-        raise ValueError(f"Unknown model type: {model_args.type}")
     
+    if model_args.loss_function["type"] not in losses_dict:
+        raise ValueError(f"Unknown loss function: {model_args.loss_function['type']}")  
+    loss_class = losses_dict[model_args.loss_function["type"]]
+    loss_fn = loss_class(**model_args.loss_function)
+    
+    if model_args.type not in models_dict:
+        raise ValueError(f"Unknown model type: {model_args.type}")
+    model_class = models_dict[model_args.type]
+    model = model_class(**model_args.__dict__, loss_fn=loss_fn)
 
     if model_args.pretrained_model is not None:
         logger.info(f"Loading pretrained model from {model_args.pretrained_model}")
@@ -179,26 +167,39 @@ def main():
         
     def compute_forcast(out):
         
-        results = {}
+        metric = MultiForecastMetric(**model_args.loss_function)
         
-        results['rmse'] = rmse_loss(out.predictions, out.label_ids, **model_args.loss_function)
-        results['mae'] = mae_loss(out.predictions, out.label_ids, **model_args.loss_function)
-        
-        results["rmspe"] = rmspe_loss(out.predictions, out.label_ids, **model_args.loss_function    )
-        
-        results["mape"] = mape_loss(out.predictions, out.label_ids)
+        results = metric(out.predictions, out.label_ids)
         
         results['score'] = (results["rmspe"] + results["mape"]) / 2
         
         return results
+    
+    def compute_returns(out):   
+        
+        import numpy as np
+
+        
+        metric = InvMetric(**model_args.loss_function)
+        
+        results = metric(out.inputs, out.predictions, out.label_ids)
+        
+        log_pnl_std = np.std(np.exp(results["log_pnl"]))
+        
+        return {"pnl": np.exp(results["mean_log_pnl"]), "pnl_std": log_pnl_std, "log_pnl": results["mean_log_pnl"]}
 
         
     def compute_metrics(out):
+        
+        if model_args.loss_function["type"] in ["inv", "inv_order", "basic_inv"]:
+            return compute_returns(out)
+        else:
+            
 
-        return compute_forcast(out)
+            return compute_forcast(out)
 
     # Initialize our Trainer
-    trainer = Trainer(
+    trainer = CustomTrainer(
         model=model,
         args=training_args,
         train_dataset=train_dataset if training_args.do_train else None,
