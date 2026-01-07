@@ -24,7 +24,7 @@ class RevIn(nn.Module):
         self.last = None
         
         self.scale_type = scale_type
-
+        
     def forward(self, x: torch.Tensor, mode: str = 'norm') -> torch.Tensor:
         """
         Args:

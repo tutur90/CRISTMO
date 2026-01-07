@@ -126,6 +126,5 @@ class InvMetric(BaseMetric):
         
         log_pnl = np.log(np.clip(pnl, a_min=1e-12, a_max=None)) / np.arange(1, T+1).reshape(1, -1)
         
-        
         return {'pnl': pnl, 'log_pnl': log_pnl}
         

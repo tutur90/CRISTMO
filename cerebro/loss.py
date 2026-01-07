@@ -1,3 +1,4 @@
+from operator import inv
 import torch
 import torch.nn as nn
 from typing import Optional
@@ -139,30 +140,32 @@ class RMSPE(BaseForecastLoss):
 
 
 class BasicInvLoss(torch.nn.Module):
-    def __init__(self, leverage=1.0, fee=0.01, **kwargs):
+    def __init__(self, leverage=1.0, fee=0.01,  **kwargs):
         super().__init__()
         self.leverage = leverage
         self.fee = fee/100
+        self.output_norm = "weighted"
+        self.freq_weight = None
 
     def forward(self, output: torch.Tensor, target: torch.Tensor, leverage=None, num_items_in_batch: int= None) -> torch.Tensor:
         if leverage is None:
             leverage = self.leverage
             
+
             
-        inv = output["pred"].squeeze() * leverage
-
-        ret = target.squeeze().exp() / output["last"].exp().reshape(-1, 1)  # (B, T)
+        w = output["pred"].squeeze() * leverage
         
-        pnl = inv * (ret - 1) + 1 - self.fee*inv.abs()  # (B, T)
-        log_pnl = torch.log(pnl.clamp(min=1e-12)) / torch.arange(1, pnl.shape[1]+1, device=pnl.device).float().reshape(1, -1)
 
-        return -log_pnl.mean() * 60 * 24 * 364  # minimize negative log-pnl
-    
-    def post_forward(self, predictions, rev_in: RevIn):
+        R = (target.squeeze() - output["last"].reshape(-1, 1)).exp()  # (B, T)
 
-        predictions = predictions.tanh()
+        pnl = 1 + w * (R - 1) * (1 - self.fee) - self.fee * w.abs() * 2
         
-        return {"pred": predictions, "last": rev_in.last, "scale": rev_in.scale}
+        pnl = pnl.clamp(min=1e-12) 
+        
+        log_pnl = torch.log(pnl)
+
+        return -log_pnl.mean() * 24 * 364  # minimize negative log-pnl
+
     
     
 class InvLoss(torch.nn.Module):
