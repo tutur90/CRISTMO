@@ -145,20 +145,18 @@ class BasicInvLoss(torch.nn.Module):
         self.leverage = leverage
         self.fee = fee/100
         self.output_norm = "weighted"
-        self.freq_weight = None
+        self.cumsum = False
 
     def forward(self, output: torch.Tensor, target: torch.Tensor, leverage=None, num_items_in_batch: int= None) -> torch.Tensor:
         if leverage is None:
             leverage = self.leverage
-            
-
-            
-        w = output["pred"].squeeze() * leverage
-        
 
         R = (target.squeeze() - output["last"].reshape(-1, 1)).exp()  # (B, T)
 
-        pnl = 1 + w * (R - 1) * (1 - self.fee) - self.fee * w.abs() * 2
+        w = output["pred"].squeeze() * leverage
+        
+
+        pnl = 1 + torch.sum(w * (R - 1), dim=-1) * (1 - self.fee) - self.fee * torch.sum(w.abs(), dim=-1) * 2
         
         pnl = pnl.clamp(min=1e-12) 
         

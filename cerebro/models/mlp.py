@@ -121,10 +121,8 @@ class MLPModel(BaseModel):
             num_symbols: Maximum number of unique symbols for embedding
             loss_fn: Loss function to use
         """
-        super().__init__(input_features=input_features, loss_fn=loss_fn)
-        self.loss_fn = loss_fn if loss_fn is not None else nn.MSELoss()
-        
-        
+        super().__init__(input_features=input_features, loss_fn=loss_fn, output_dim=output_dim)
+
         # Output projection
         self.fc = nn.Linear(hidden_dim, output_dim)
         

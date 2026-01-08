@@ -93,11 +93,12 @@ class InvMetric(BaseMetric):
     """
     Inverse Transformation Metric for PnL calculation
     """
-    def __init__(self, epsilon=1e-8, leverage=1.0, fee=0.01, **kwargs):
+    def __init__(self, epsilon=1e-8, leverage=1.0, fee=0.01, output_dim=None, **kwargs):
         super().__init__()
         self.epsilon = epsilon
         self.leverage = leverage
         self.fee = fee/100
+        self.cumsum = False
         
     def __call__(self, inputs, inv, target, **kwargs):
         return self.forward(inputs, inv, target, **kwargs)
@@ -113,18 +114,31 @@ class InvMetric(BaseMetric):
             PnL metric
         """
         
-        B, T, C = target.shape
+        target = np.exp(target).squeeze()
+        inv = inv[0].squeeze()
+        
+        B, T = target.shape
+        
+        w = np.zeros((B + T, ))  # (B + T,)
+        
+
+        inv = np.cumsum(inv[:,  ::-1], axis=-1)[:, ::-1]  # (B + C,)
         
         
-        inv = inv[0].reshape(B, T) * self.leverage  # (B, T)
+        for i in range(0, B):
+            
+            w[i:i + T] += inv[i , 0] / min(T, i + 1)  # distribute weight over available timesteps
         
-        last = np.exp(inputs["sources"][:, -1:, -1])  # (B, 1)
         
-        ret = np.exp(target.reshape(B, T)) / last.reshape(B, 1)  # (B, T)
         
-        pnl = inv * (ret - 1) + 1 - self.fee * np.abs(inv)  # (B, T)
+        R =  target[1:, 0] / target[:-1, 0]  # (B - 1,)
         
-        log_pnl = np.log(np.clip(pnl, a_min=1e-12, a_max=None)) / np.arange(1, T+1).reshape(1, -1)
         
-        return {'pnl': pnl, 'log_pnl': log_pnl}
+        fees = self.fee * np.abs(np.diff(w[:-T]))
+        
+        pnl = w[1:-T] * (R - 1) + 1 - fees
+        
+        log_pnl = np.log(np.clip(pnl, a_min=1e-12, a_max=None))
+        
+        return {'pnl': pnl, 'log_pnl': log_pnl, 'weights': w[1:-T]}
         

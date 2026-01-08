@@ -6,9 +6,9 @@ from cerebro.models.modules import FeatureExtractor, RevIn
 class WeightedNorm(nn.Module):
     def __init__(self, output_dim: int, dim: int = -1):
         super().__init__()
-        shape = [-1] * 3 # -1 for limit the exponential growth of softmax
+        shape = [1] * 3 
         shape[dim] = output_dim
-        self.weight = nn.Parameter(torch.ones(*shape))
+        self.weight = nn.Parameter(-torch.ones(*shape)) # -1 for limit the exponential growth of softmax
         self.dim = dim
         self.softmax = nn.Softmax(dim=self.dim)
         
