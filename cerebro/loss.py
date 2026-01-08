@@ -156,13 +156,16 @@ class BasicInvLoss(torch.nn.Module):
         w = output["pred"].squeeze() * leverage
         
 
-        pnl = 1 + torch.sum(w * (R - 1), dim=-1) * (1 - self.fee) - self.fee * torch.sum(w.abs(), dim=-1) * 2
+        pnl = 1 + w * (R - 1) * (1 - self.fee) - self.fee * w.abs() * 2
         
-        pnl = pnl.clamp(min=1e-12) 
+        pnl = pnl.clamp(min=1e-8) 
         
-        log_pnl = torch.log(pnl)
+        log_pnl = torch.log(pnl) / torch.arange(1, pnl.shape[1] + 1, device=pnl.device).unsqueeze(0)  # (B, T)  
+        
+        # log_pnl = ((log_pnl.exp()-1).sum(dim=-1)+1).log()  # (B,)
+        
 
-        return -log_pnl.mean() * 24 * 364  # minimize negative log-pnl
+        return -log_pnl.mean() * 60 * 24 * 364  # minimize negative log-pnl
 
     
     
