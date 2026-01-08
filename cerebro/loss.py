@@ -144,25 +144,31 @@ class BasicInvLoss(torch.nn.Module):
         super().__init__()
         self.leverage = leverage
         self.fee = fee/100
-        self.output_norm = "weighted"
+        self.output_norm = "tanh"
         self.cumsum = False
+        self.exact = True
 
     def forward(self, output: torch.Tensor, target: torch.Tensor, leverage=None, num_items_in_batch: int= None) -> torch.Tensor:
         if leverage is None:
             leverage = self.leverage
 
-        R = (target.squeeze() - output["last"].reshape(-1, 1)).exp()  # (B, T)
+        # R = (target.squeeze() - output["last"].reshape(-1, 1)).exp()  # (B, T)
+        
+        R = target.squeeze().exp()/ output["last"].reshape(-1, 1).exp()  # (B, T)
 
         w = output["pred"].squeeze() * leverage
         
 
         pnl = 1 + w * (R - 1) * (1 - self.fee) - self.fee * w.abs() * 2
         
-        pnl = pnl.clamp(min=1e-8) 
+        pnl = pnl.clamp(min=1e-12) 
         
         log_pnl = torch.log(pnl) / torch.arange(1, pnl.shape[1] + 1, device=pnl.device, dtype=pnl.dtype).unsqueeze(0)  # (B, T)  
         
-        log_pnl = ((log_pnl.exp()-1).sum(dim=-1)+1).log()  # (B,)
+        if self.exact:
+            log_pnl = ((log_pnl.exp()-1).mean(dim=-1)+1).log()  # (B,)
+        else:
+            log_pnl = log_pnl.mean(dim=-1)  # (B,)
         
 
         return -log_pnl.mean() * 60 * 24 * 364  # minimize negative log-pnl
