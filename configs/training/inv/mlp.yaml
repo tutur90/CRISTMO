@@ -31,13 +31,13 @@ pool_kernel: 1
 loss_function: 
    type: inv
    leverage: 1.0
-   fee: 0.01
+   fee: 0.005
 
 # === Entraînement ===
 do_eval: true
 do_train: true
-per_device_train_batch_size: 512
-per_device_eval_batch_size: 1024
+per_device_train_batch_size: 1024
+per_device_eval_batch_size: 2048
 # total_batch_size: 64
 # gradient_accumulation_steps: 16
 
