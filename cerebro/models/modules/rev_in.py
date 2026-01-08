@@ -57,6 +57,11 @@ class RevIn(nn.Module):
                     self.scale = x_centered.abs().max(dim=1, keepdim=False).values[:, self.scaling_idx] + self.eps
                 else:
                     self.scale = x_centered.abs().max(dim=1, keepdim=False).values + self.eps
+            elif self.scale_type == 'diff':
+                if self.scaling_idx is not None:
+                    self.scale = (x_centered.diff(dim=1).max(dim=1, keepdim=False).values[:, self.scaling_idx] )
+                else:
+                    self.scale = (x_centered.diff(dim=1).max(dim=1, keepdim=False).values ) + self.eps
             elif self.scale_type == 'none':
                 self.scale = torch.ones_like(self.std)
             else:

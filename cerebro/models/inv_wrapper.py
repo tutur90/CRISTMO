@@ -65,8 +65,6 @@ class InvWrapper(BaseModel):
             nn.Linear(hidden_dim, output_dim)
         )
 
-
-
         self.hidden_dim = hidden_dim
         self.num_layers = num_layers
         self.output_dim = output_dim
@@ -92,16 +90,17 @@ class InvWrapper(BaseModel):
         """
         
         B, T, C = sources.shape
+        
 
         # Normalize input
         
         x = self.pre_forward(sources, volumes=volumes)
         
-        enc_out = self.encoder(sources, volumes, symbols)  # (B, T, hidden_dim)
+        enc_out = self.encoder(x, symbols=symbols)  # (B, 1, hidden_dim)
         
         enc_out = enc_out[:, -1, :]  # (B, hidden_dim)
         
-        enc_out = torch.cat([enc_out, self.rev_in.scale], dim=-1)  # (B, hidden_dim)
+        enc_out = torch.cat([enc_out, self.rev_in.scale/self.rev_in.last], dim=-1)  # (B, hidden_dim)
         
         out = self.fc(enc_out).unsqueeze(1)  # (B, 1, output_dim)
         
