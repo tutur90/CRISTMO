@@ -120,7 +120,6 @@ class InvMetric(BaseMetric):
         B, T = target.shape
         
         w = np.zeros((B + T, ))  # (B + T,)
-        
 
         inv = np.cumsum(inv[:,  ::-1], axis=-1)[:, ::-1]  # (B + C,)
         
@@ -128,8 +127,6 @@ class InvMetric(BaseMetric):
         # for i in range(0, B):
             
         #     w[i:i + T] += inv[i , 0] / min(T, i + 1)  # distribute weight over available timesteps
-        
-        
         
         R =  target[1:, 0] / target[:-1, 0]  # (B - 1,)
         

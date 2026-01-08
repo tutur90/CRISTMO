@@ -224,3 +224,52 @@ class InvLoss(torch.nn.Module):
         log_pnl = torch.log(pnl.clamp(min=1e-8)) 
 
         return -log_pnl.mean() * 24 * 364  # minimize negative log-pnl
+    
+    
+class OrderInvLoss(torch.nn.Module):
+    def __init__(self, leverage=1.0, grid_scale: float=1.0, softmax: bool=False, fee=0.01, log_scale: bool=True, **kwargs):
+        super().__init__()
+        self.leverage = leverage
+        self.grid_scale = grid_scale
+        self.softmax = softmax
+        self.fee = fee
+        self.log_scale = log_scale
+
+    def forward(self, output: torch.Tensor, target: torch.Tensor,  num_items_in_batch: int= None) -> torch.Tensor:
+
+
+        scale = output["scale"] * self.grid_scale
+
+        grid = torch.linspace(-scale, scale, steps=output.shape[-1], device=output.device).unsqueeze(0) * scale.unsqueeze(1)   # (B, D)
+
+        if self.softmax:
+
+            inv = torch.softmax(output, dim=-1) * -torch.sign(grid)
+
+        else:
+            inv = output/output.abs().sum(dim=-1, keepdim=True)
+
+
+        grid = grid + output["last"].view(-1, 1)  # (B, D)
+        
+        if self.log_scale:
+            ret = target[:, 2].unsqueeze(-1) - (grid)  # (B, T)
+        else:
+            ret = target[:, 2].unsqueeze(-1)/ (grid) 
+
+
+        taken_order = (grid > target[:, 0].unsqueeze(-1).repeat(1, grid.shape[1])) * (grid < target[:, 1].unsqueeze(-1).repeat(1, grid.shape[1]))  # (B, D)
+
+
+        inv = inv * taken_order * self.leverage  # (B, D)
+
+        if self.log_scale:
+            pnl = (inv * (ret.exp() - 1)).sum(dim=-1) + 1  # (B, T)
+        else:
+            pnl = (inv * (ret - 1)).sum(dim=-1) + 1  # (B, T)
+            
+        pnl = pnl - self.fee/100*inv.abs().sum(dim=-1) # - 4* self.fee/100*inv.sum(dim=-1).abs()
+
+        log_pnl = torch.log(pnl.clamp(min=1e-8)) 
+
+        return -log_pnl.mean() * 24 * 364  # minimize negative log-pnl
