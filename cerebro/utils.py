@@ -125,9 +125,9 @@ class InvMetric(BaseMetric):
         inv = np.cumsum(inv[:,  ::-1], axis=-1)[:, ::-1]  # (B + C,)
         
         
-        for i in range(0, B):
+        # for i in range(0, B):
             
-            w[i:i + T] += inv[i , 0] / min(T, i + 1)  # distribute weight over available timesteps
+        #     w[i:i + T] += inv[i , 0] / min(T, i + 1)  # distribute weight over available timesteps
         
         
         

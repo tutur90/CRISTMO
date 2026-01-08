@@ -137,14 +137,12 @@ class RMSPE(BaseForecastLoss):
         return loss
 
 
-
-
 class BasicInvLoss(torch.nn.Module):
     def __init__(self, leverage=1.0, fee=0.01,  **kwargs):
         super().__init__()
         self.leverage = leverage
         self.fee = fee/100
-        self.output_norm = "tanh"
+        self.output_norm = "weighted"
         self.cumsum = False
         self.exact = True
 
@@ -158,6 +156,7 @@ class BasicInvLoss(torch.nn.Module):
 
         w = output["pred"].squeeze() * leverage
         
+        # print(w.mean().item(), w.std(dim=-1 ).mean().item(), w.std().mean().item())
 
         pnl = 1 + w * (R - 1) * (1 - self.fee) - self.fee * w.abs() * 2
         
@@ -169,6 +168,8 @@ class BasicInvLoss(torch.nn.Module):
             log_pnl = ((log_pnl.exp()-1).mean(dim=-1)+1).log()  # (B,)
         else:
             log_pnl = log_pnl.mean(dim=-1)  # (B,)
+            
+        
         
 
         return -log_pnl.mean() * 60 * 24 * 364  # minimize negative log-pnl

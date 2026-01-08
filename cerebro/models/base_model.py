@@ -8,13 +8,15 @@ class WeightedNorm(nn.Module):
         super().__init__()
         shape = [1] * 3 
         shape[dim] = output_dim
+        self.output_dim = output_dim
         self.weight = nn.Parameter(torch.zeros(*shape)) # -1 for limit the exponential growth of softmax
         self.dim = dim
         self.softmax = nn.Softmax(dim=self.dim)
         self.tanh = nn.Tanh()
+        # self.leverage = nn.Parameter(torch.ones(1, 1, 1))  # learnable leverage parameter
         
     def forward(self, x):
-        return self.tanh(x) * self.softmax(self.weight)
+        return self.tanh(x) * (self.softmax(self.weight) * self.output_dim)
 
 class BaseModel(nn.Module):
     def __init__(self, input_features, output_dim, loss_fn=None,  output_norm=None, **kwargs):
@@ -41,9 +43,12 @@ class BaseModel(nn.Module):
         elif output_norm == 'sigmoid':
             self.output_norm = nn.Sigmoid()
         elif output_norm == 'weighted':
+            print("Using WeightedNorm as output normalization.")
             self.output_norm = WeightedNorm(output_dim=output_dim, dim=-1)
+        elif output_norm is None:
+            self.output_norm = nn.Identity()
         else:
-            self.output_norm = lambda x, mode: x  # identity
+            raise ValueError(f"Unknown output_norm: {output_norm}")
 
 
     def pre_forward(self, sources, volumes=None, **kwargs):
