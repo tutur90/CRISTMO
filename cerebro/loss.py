@@ -160,9 +160,9 @@ class BasicInvLoss(torch.nn.Module):
         
         pnl = pnl.clamp(min=1e-8) 
         
-        log_pnl = torch.log(pnl) / torch.arange(1, pnl.shape[1] + 1, device=pnl.device).unsqueeze(0)  # (B, T)  
+        log_pnl = torch.log(pnl) / torch.arange(1, pnl.shape[1] + 1, device=pnl.device, dtype=pnl.dtype).unsqueeze(0)  # (B, T)  
         
-        # log_pnl = ((log_pnl.exp()-1).sum(dim=-1)+1).log()  # (B,)
+        log_pnl = ((log_pnl.exp()-1).sum(dim=-1)+1).log()  # (B,)
         
 
         return -log_pnl.mean() * 60 * 24 * 364  # minimize negative log-pnl

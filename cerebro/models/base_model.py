@@ -8,12 +8,13 @@ class WeightedNorm(nn.Module):
         super().__init__()
         shape = [1] * 3 
         shape[dim] = output_dim
-        self.weight = nn.Parameter(-torch.ones(*shape)) # -1 for limit the exponential growth of softmax
+        self.weight = nn.Parameter(torch.zeros(*shape)) # -1 for limit the exponential growth of softmax
         self.dim = dim
         self.softmax = nn.Softmax(dim=self.dim)
+        self.tanh = nn.Tanh()
         
     def forward(self, x):
-        return x * self.softmax(self.weight)
+        return self.tanh(x) * self.softmax(self.weight)
 
 class BaseModel(nn.Module):
     def __init__(self, input_features, output_dim, loss_fn=None,  output_norm=None, **kwargs):
