@@ -11,3 +11,4 @@ transformers
 accelerate
 matplotlib
 pytorch-tcn
+zuko

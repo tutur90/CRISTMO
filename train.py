@@ -125,7 +125,7 @@ def main():
     if model_args.type not in models_dict:
         raise ValueError(f"Unknown model type: {model_args.type}")
     model_class = models_dict[model_args.type]
-    model = model_class(**model_args.__dict__, loss_fn=loss_fn)
+    model = model_class(**model_args.__dict__)
 
     if model_args.pretrained_model is not None:
         logger.info(f"Loading pretrained model from {model_args.pretrained_model}")
