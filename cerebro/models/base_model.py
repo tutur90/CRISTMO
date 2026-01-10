@@ -5,6 +5,14 @@ from cerebro.models.modules import FeatureExtractor, RevIn
 from cerebro.models.mlp import MLPCore
 from typing import Optional, Tuple
 
+losses_dict = {
+    "relative_mse": RelativeMSELoss,
+    "inv": BasicInvLoss,
+    "inv_order": InvLoss,
+    "mape": MAPE,
+    "rmspe": RMSPE,
+}
+
 class WeightedNorm(nn.Module):
     def __init__(self, output_dim: int, dim: int = -1):
         super().__init__()
@@ -12,19 +20,24 @@ class WeightedNorm(nn.Module):
         shape[dim] = output_dim
         self.output_dim = output_dim
         self.weight = nn.Parameter(torch.zeros(*shape)) # -1 for limit the exponential growth of softmax
+        self.output_dim = output_dim
+        self.weight = nn.Parameter(torch.zeros(*shape)) # -1 for limit the exponential growth of softmax
         self.dim = dim
         self.softmax = nn.Softmax(dim=self.dim)
+        self.tanh = nn.Tanh()
+        # self.leverage = nn.Parameter(torch.ones(1, 1, 1))  # learnable leverage parameter
         self.tanh = nn.Tanh()
         # self.leverage = nn.Parameter(torch.ones(1, 1, 1))  # learnable leverage parameter
         
     def forward(self, x):
         return self.tanh(x) * (self.softmax(self.weight) * self.output_dim)
+        return self.tanh(x) * (self.softmax(self.weight) * self.output_dim)
 
 class BaseModel(nn.Module):
-    def __init__(self, input_features, output_dim, loss_fn=None,  output_norm=None, **kwargs):
+    def __init__(self, input_features, output_dim, loss_function,  output_norm=None, **kwargs):
         super().__init__()
         
-        self.loss_fn = loss_fn 
+        self.loss_fn = losses_dict[loss_function["type"]](**loss_function)
         
         output_norm = output_norm or self.loss_fn.output_norm
         
@@ -46,10 +59,14 @@ class BaseModel(nn.Module):
             self.output_norm = nn.Sigmoid()
         elif output_norm == 'weighted':
             print("Using WeightedNorm as output normalization.")
+            print("Using WeightedNorm as output normalization.")
             self.output_norm = WeightedNorm(output_dim=output_dim, dim=-1)
         elif output_norm is None:
             self.output_norm = nn.Identity()
+        elif output_norm is None:
+            self.output_norm = nn.Identity()
         else:
+            raise ValueError(f"Unknown output_norm: {output_norm}")
             raise ValueError(f"Unknown output_norm: {output_norm}")
 
 
@@ -72,6 +89,99 @@ class BaseModel(nn.Module):
             output["loss"] = self.loss_fn(output, labels)
         return output
     
+models_dict = {
+    'mlp': MLPCore,
+    # 'transformer': TransformerCore,
+}
+
+class BaseWrapper(BaseModel):
+    """MLP-based model for cryptocurrency price prediction."""
+    
+    def __init__(
+        self, 
+        input_features: list,
+        type: str = 'mlp',
+        hidden_dim: int = 64, 
+        output_dim: int = 3, 
+        seg_length: int = 60, 
+        num_layers: int = 2,
+        conv_kernel: int = 5,
+        pool_kernel: int = 1,
+        dropout: float = 0.0,
+        num_symbols: int = 100,
+        loss_fn: nn.Module = None,
+        **kwargs
+    ):
+        """
+        Args:
+            input_dim: Number of input features
+            hidden_dim: Hidden dimension size
+            output_dim: Number of output features
+            seg_length: Length of input sequences
+            num_layers: Number of LSTM layers
+            conv_kernel: Kernel size for convolution (None to disable)
+            pool_kernel: Kernel size for pooling (None to disable)
+            dropout: Dropout probability for LSTM
+            num_symbols: Maximum number of unique symbols for embedding
+            loss_fn: Loss function to use
+        """
+        super().__init__()
+
+        # Output projection
+        self.encoder = models_dict[type](
+            input_dim=len(input_features) + (0 if num_symbols is None else 1),
+            hidden_dim=hidden_dim,
+            output_dim=hidden_dim,
+            seg_length=seg_length,
+            num_layers=num_layers,
+            conv_kernel=conv_kernel,
+            pool_kernel=pool_kernel,
+            dropout=dropout,
+            num_symbols=num_symbols,
+            loss_fn=loss_fn,
+            **kwargs
+        )
+        self.fc = nn.Linear(hidden_dim, output_dim)
+        self.hidden_dim = hidden_dim
+        self.num_layers = num_layers
+        self.output_dim = output_dim
+        self.static = False
+        
+
+    def forward(
+        self, 
+        sources: torch.Tensor,
+        volumes: Optional[torch.Tensor] = None,
+        labels: Optional[torch.Tensor] = None,
+        symbols: Optional[torch.Tensor] = None
+    ) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
+        """
+        Args:
+            src: Source tensor of shape (B, T, C)
+            tgt: Target tensor of shape (B, 1, C) or (B, output_dim) (optional)
+            symbol: Symbol indices of shape (B,) (optional)
+        Returns:
+            Tuple of (predictions, loss)
+            - predictions: Shape (B, 1, output_dim)
+            - loss: Scalar loss value (None if tgt is not provided)
+        """
+        
+        B, T, C = sources.shape
+        
+
+        # Normalize input
+        
+        x = self.pre_forward(sources, volumes=volumes)
+        
+        enc_out = self.encoder(x, symbols=symbols)  # (B, 1, hidden_dim)
+        
+        enc_out = enc_out[:, -1, :]  # (B, hidden_dim)
+        
+        out = self.fc(enc_out).unsqueeze(1)  # (B, 1, output_dim)
+        
+        
+        # Calculate loss if target is provided
+        return self.post_forward(out, labels)
 models_dict = {
     'mlp': MLPCore,
     # 'transformer': TransformerCore,
