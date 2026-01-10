@@ -18,7 +18,7 @@ from cerebro.models.inv_wrapper import InvWrapper
 from cerebro.models.tcn import TCNModel
 from cerebro.models.tcn2 import TCN2Model
 from cerebro.dataset import CryptoDataset
-from cerebro.trainer import CustomTrainer
+from cerebro.standalone_trainer import StandaloneTrainer
 
 from cerebro.utils import MultiForecastMetric, InvMetric
 
@@ -214,7 +214,7 @@ def main():
             return compute_forcast(out)
 
     # Initialize our Trainer
-    trainer = CustomTrainer(
+    trainer = StandaloneTrainer(
         model=model,
         args=training_args,
         train_dataset=train_dataset if training_args.do_train else None,
