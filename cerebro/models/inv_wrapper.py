@@ -43,11 +43,11 @@ class InvWrapper(BaseModel):
             num_symbols: Maximum number of unique symbols for embedding
             loss_fn: Loss function to use
         """
-        super().__init__()
+        super().__init__(input_features=input_features, loss_fn=loss_fn, output_dim=output_dim, **kwargs)
 
         # Output projection
         self.encoder = models_dict[type](
-            input_dim=len(input_features) + (0 if num_symbols is None else 1),
+            input_dim=len(input_features),
             hidden_dim=hidden_dim,
             output_dim=hidden_dim,
             seg_length=seg_length,
@@ -100,7 +100,7 @@ class InvWrapper(BaseModel):
         
         enc_out = enc_out[:, -1, :]  # (B, hidden_dim)
         
-        enc_out = torch.cat([enc_out, self.rev_in.scale/self.rev_in.last], dim=-1)  # (B, hidden_dim)
+        enc_out = torch.cat([enc_out, self.rev_in.scale.reshape(-1, 1)/self.rev_in.last.reshape(-1, 1)], dim=-1)  # (B, hidden_dim)
         
         out = self.fc(enc_out).unsqueeze(1)  # (B, 1, output_dim)
         

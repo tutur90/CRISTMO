@@ -31,7 +31,7 @@ pool_kernel: 1
 loss_function: 
    type: inv
    leverage: 1.0
-   fee: 0.005
+   fee: 0.02
 
 # === Entraînement ===
 do_eval: true
