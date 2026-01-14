@@ -179,6 +179,7 @@ class MLPModel(BaseModel):
         if not self.training and self.static:
             x = torch.zeros(B, 1, self.output_dim, device=x.device)
             
+            
         out = self.post_forward(x, labels)
 
         # Calculate loss if target is provided

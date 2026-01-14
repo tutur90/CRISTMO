@@ -173,12 +173,27 @@ class InvLoss(torch.nn.Module):
         self.grid_scale = grid_scale
         self.softmax = softmax
         self.fee = fee
+        self.maker_fee = 0.005 / 100
+        self.taker_fee = 0.04 / 100
         self.log_scale = log_scale
+        self.output_norm = "tanh"
 
-    def forward(self, output: torch.Tensor, target: torch.Tensor, rev_in: RevIn, num_items_in_batch: int= None) -> torch.Tensor:
+    def forward(self, output: torch.Tensor, target: torch.Tensor,    num_items_in_batch: int= None) -> torch.Tensor:
 
 
-        scale = rev_in.scale * self.grid_scale
+        scale = output["scale"].squeeze() * self.grid_scale  # (B,)
+        last = output["last"].squeeze()  # (B,)
+        output = output["pred"].squeeze()  # (B, D)
+        
+        open_idx = 0
+        high_idx = 1
+        low_idx = 2
+        close_idx = 3
+        
+        target = target.squeeze()  # (B, 4) 1: open, 2: high, 3: low, 4: close
+        
+        B, D = output.shape
+        
 
         grid = torch.linspace(-1, 1, steps=output.shape[-1], device=output.device).unsqueeze(0) * scale.unsqueeze(1)   # (B, D)
 
@@ -191,15 +206,20 @@ class InvLoss(torch.nn.Module):
 
 
         
-        grid = grid + rev_in.last.view(-1, 1)  # (B, D)
+        grid = grid + last.view(-1, 1)  # (B, D)
         
         if self.log_scale:
-            ret = target[:, 2].unsqueeze(-1) - (grid)  # (B, T)
+            ret = target[:, close_idx].unsqueeze(-1) - (grid)  # (B, T)
         else:
-            ret = target[:, 2].unsqueeze(-1)/ (grid) 
+            ret = target[:, close_idx].unsqueeze(-1)/ (grid) 
+            
+            
 
 
-        taken_order = (grid > target[:, 0].unsqueeze(-1).repeat(1, grid.shape[1])) * (grid < target[:, 1].unsqueeze(-1).repeat(1, grid.shape[1]))  # (B, D)
+        taken_order = (grid > target[:, low_idx].unsqueeze(-1).repeat(1, grid.shape[1])) * (grid < target[:, high_idx].unsqueeze(-1).repeat(1, grid.shape[1]))  # (B, D)
+        
+        
+
 
 
         inv = inv * taken_order * self.leverage  # (B, D)
@@ -209,8 +229,9 @@ class InvLoss(torch.nn.Module):
         else:
             pnl = (inv * (ret - 1)).sum(dim=-1) + 1  # (B, T)
             
-        pnl = pnl - self.fee/100*inv.abs().sum(dim=-1) # - 4* self.fee/100*inv.sum(dim=-1).abs()
+        pnl = pnl - self.maker_fee*inv.abs().sum(dim=-1) - self.taker_fee*inv.sum(dim=-1).abs()
 
         log_pnl = torch.log(pnl.clamp(min=1e-8)) 
+        
 
         return -log_pnl.mean() * 24 * 364  # minimize negative log-pnl
