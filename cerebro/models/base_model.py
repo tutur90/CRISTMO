@@ -1,17 +1,7 @@
-from typing import Optional
+from typing import Optional,     Tuple
 import torch
 import torch.nn as nn
 from cerebro.models.modules import FeatureExtractor, RevIn
-from cerebro.models.mlp import MLPCore
-from typing import Optional, Tuple
-
-losses_dict = {
-    "relative_mse": RelativeMSELoss,
-    "inv": BasicInvLoss,
-    "inv_order": InvLoss,
-    "mape": MAPE,
-    "rmspe": RMSPE,
-}
 
 class WeightedNorm(nn.Module):
     def __init__(self, output_dim: int, dim: int = -1):
@@ -34,10 +24,10 @@ class WeightedNorm(nn.Module):
         return self.tanh(x) * (self.softmax(self.weight) * self.output_dim)
 
 class BaseModel(nn.Module):
-    def __init__(self, input_features, output_dim, loss_function,  output_norm=None, **kwargs):
+    def __init__(self, input_features, output_dim, loss_fn=None,  output_norm=None, **kwargs):
         super().__init__()
         
-        self.loss_fn = losses_dict[loss_function["type"]](**loss_function)
+        self.loss_fn = loss_fn 
         
         output_norm = output_norm or self.loss_fn.output_norm
         
@@ -89,10 +79,6 @@ class BaseModel(nn.Module):
             output["loss"] = self.loss_fn(output, labels)
         return output
     
-models_dict = {
-    'mlp': MLPCore,
-    # 'transformer': TransformerCore,
-}
 
 class BaseWrapper(BaseModel):
     """MLP-based model for cryptocurrency price prediction."""
@@ -128,20 +114,25 @@ class BaseWrapper(BaseModel):
         super().__init__()
 
         # Output projection
-        self.encoder = models_dict[type](
-            input_dim=len(input_features) + (0 if num_symbols is None else 1),
-            hidden_dim=hidden_dim,
-            output_dim=hidden_dim,
-            seg_length=seg_length,
-            num_layers=num_layers,
-            conv_kernel=conv_kernel,
-            pool_kernel=pool_kernel,
-            dropout=dropout,
-            num_symbols=num_symbols,
-            loss_fn=loss_fn,
-            **kwargs
+        # self.encoder = models_dict[type](
+        #     input_dim=len(input_features) + (0 if num_symbols is None else 1),
+        #     hidden_dim=hidden_dim,
+        #     output_dim=hidden_dim,
+        #     seg_length=seg_length,
+        #     num_layers=num_layers,
+        #     conv_kernel=conv_kernel,
+        #     pool_kernel=pool_kernel,
+        #     dropout=dropout,
+        #     num_symbols=num_symbols,
+        #     loss_fn=loss_fn,
+        #     **kwargs
+        # )
+        self.fc = nn.Sequential(
+            nn.Linear(hidden_dim + 1, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, output_dim)
         )
-        self.fc = nn.Linear(hidden_dim, output_dim)
+
         self.hidden_dim = hidden_dim
         self.num_layers = num_layers
         self.output_dim = output_dim
@@ -176,6 +167,8 @@ class BaseWrapper(BaseModel):
         enc_out = self.encoder(x, symbols=symbols)  # (B, 1, hidden_dim)
         
         enc_out = enc_out[:, -1, :]  # (B, hidden_dim)
+        
+        enc_out = torch.cat([enc_out, self.rev_in.scale/self.rev_in.last], dim=-1)  # (B, hidden_dim)
         
         out = self.fc(enc_out).unsqueeze(1)  # (B, 1, output_dim)
         

@@ -43,7 +43,7 @@ per_device_eval_batch_size: 4096
 
 max_steps: 10000
 save_steps: 1000
-eval_delay: 500
+eval_delay: 0
 eval_steps: 500
 eval_strategy: steps
 prediction_loss_only: false

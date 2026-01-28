@@ -26,8 +26,7 @@ class BaseForecast(BaseMetric):
         self.use_close = use_close
         self.use_last = use_last   
         
-    def forward(self, y_pred, y_true, **kwargs):
-        
+    def normalize(self, y_pred, y_true, **kwargs):
         if self.use_close:
             y_pred = y_pred[:, :, -1]  # (B,) - last timestep only
         y_true = y_true[:, :, -1]  # (B,)
@@ -37,8 +36,13 @@ class BaseForecast(BaseMetric):
             y_true = y_true[:, -1]  # (B,)
         
         y_pred, y_true = np.exp(y_pred), np.exp(y_true)
+        return y_pred, y_true
         
-        raise self._forward(y_pred, y_true)
+    def forward(self, y_pred, y_true, **kwargs):
+        y_pred, y_true = self.normalize(y_pred, y_true)
+
+        
+        raise self._forward(y_pred, y_true, **kwargs)
     
     def _forward(self, y_pred, y_true):
         raise NotImplementedError("Forward method not implemented in subclass.")
@@ -46,14 +50,42 @@ class BaseForecast(BaseMetric):
 class MultiForecastMetric(BaseForecast):
     """Base class for multi-step forecasting loss functions."""
     def __init__(self, epsilon=1e-8, use_close=True, **kwargs):
-        super().__init__(epsilon=epsilon, use_close=use_close, use_last=False, **kwargs)
+        super().__init__(epsilon=epsilon, use_close=use_close,  **kwargs)
     
-    def _forward(self, y_pred, y_true):
+    def forward(self, out, y_true, **kwargs):
+        
+        y_pred = out[0]
+        last = np.exp(out[1]).reshape(-1, 1)
+        scale = out[2]
+        
+        
+        y_pred, y_true = self.normalize(y_pred, y_true, **kwargs)
+        
+        y_pred, y_true = y_pred.squeeze(), y_true.squeeze()
+        
         results = {}
         results["rmse"] = rmse_loss(y_pred, y_true)
         results["mae"] = mae_loss(y_pred, y_true)
         results["mape"] = mape_loss(y_pred, y_true, epsilon=self.epsilon)
         results["rmspe"] = rmspe_loss(y_pred, y_true, epsilon=self.epsilon)
+        
+        results["mape_0"] = results["mape"] / mape_loss(last.repeat(y_true.shape[1], axis=1), y_true, epsilon=self.epsilon)
+        results["rmspe_0"] = results["rmspe"] / rmspe_loss(last.repeat(y_true.shape[1], axis=1), y_true, epsilon=self.epsilon)
+        
+        
+        
+        R = (y_true / last - 1.0) 
+        
+        print(R)
+        
+        R_pred = (y_pred / last - 1.0)
+        
+        fee = 0.01/100
+        
+        inv =  np.sign(R_pred) * (np.abs(R_pred) - fee).clip(min=0.0)
+        
+        results["inv"] = ((R * inv) - fee * np.abs(inv)).mean() * 24 * 364
+        
         return results
         
 

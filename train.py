@@ -14,7 +14,7 @@ from cerebro.models.lstm import LSTMModel
 from cerebro.models.mlp import MLPModel
 from cerebro.models.transformer import TransformerModel
 from cerebro.models.transformer2 import TransformerModel as Transformer2Model
-from cerebro.models.inv_wrapper import InvWrapper
+# from cerebro.models.inv_wrapper import InvWrapper
 from cerebro.models.tcn import TCNModel
 from cerebro.models.tcn2 import TCN2Model
 from cerebro.dataset import CryptoDataset
@@ -126,7 +126,8 @@ def main():
     if model_args.type not in models_dict:
         raise ValueError(f"Unknown model type: {model_args.type}")
     model_class = models_dict[model_args.type]
-    model = model_class(**model_args.__dict__)
+    model = model_class(**model_args.__dict__, loss_fn=loss_fn)
+    # model = InvWrapper(**model_args.__dict__, loss_fn=loss_fn)
 
     if model_args.pretrained_model is not None:
         logger.info(f"Loading pretrained model from {model_args.pretrained_model}")
@@ -186,6 +187,8 @@ def main():
         metric = InvMetric(**model_args.loss_function)
         
         results = {}
+        
+        breakpoint()
         
         metrics = metric(out.inputs, out.predictions, out.label_ids)
 

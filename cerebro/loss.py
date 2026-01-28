@@ -108,6 +108,7 @@ class RMSPE(BaseForecastLoss):
         self.epsilon = epsilon
         self.use_close = use_close  
         self.use_last = use_last
+        self.output_norm = "rev_in"
         
     def _forward(self, y_pred, y_true, num_items_in_batch: int= None):
         """
@@ -118,17 +119,7 @@ class RMSPE(BaseForecastLoss):
         Returns:
             MSPE loss as percentage
         """
-        if self.use_close:
-            y_pred = y_pred[:, :, -1]  # (B, T)
-            y_true = y_true[:, :, -1]  # (B, T)
-            
-            
-        if self.use_last:
-            y_pred = y_pred[:, -1]  # (B,)
-            y_true = y_true[:, -1]  # (B,)
-            
-        y_true, y_pred = y_true.exp().squeeze(), y_pred.exp().squeeze()
-
+        
         
         if num_items_in_batch is not None:
             print(num_items_in_batch)
