@@ -76,15 +76,19 @@ class MultiForecastMetric(BaseForecast):
         
         R = (y_true / last - 1.0) 
         
-        print(R)
+        # print(R)
         
         R_pred = (y_pred / last - 1.0)
         
-        fee = 0.01/100
+        fee = 0.08/100
         
-        inv =  np.sign(R_pred) * (np.abs(R_pred) - fee).clip(min=0.0)
+        inv =  np.sign(R_pred) * (np.abs(R_pred) - fee * 2).clip(min=0.0) 
         
-        results["inv"] = ((R * inv) - fee * np.abs(inv)).mean() * 24 * 364
+        pnl = ((R * inv) - fee * np.abs(inv))
+        
+        results["pnl"] = ((R * inv) - fee * np.abs(inv)).mean()
+        
+        results["log_pnl"] = np.log1p(pnl).mean()
         
         return results
         
