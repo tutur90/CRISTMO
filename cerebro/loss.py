@@ -145,6 +145,7 @@ class BasicInvLoss(torch.nn.Module):
         self.output_norm = "weighted"
         self.cumsum = False
         self.exact = True
+        
 
     def forward(self, output: torch.Tensor, target: torch.Tensor, leverage=None, num_items_in_batch: int= None) -> torch.Tensor:
         if leverage is None:

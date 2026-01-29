@@ -99,27 +99,16 @@ class InvMetric(BaseMetric):
         self.leverage = leverage
         self.fee = fee/100
         self.cumsum = False
+        self.exact = True
         
     def __call__(self, inputs, inv, target, **kwargs):
         return self.forward(inputs, inv, target, **kwargs)
-        
-    def forward(self, inputs, inv, target,  num_items_in_batch: int= None):
-        
-        """
-        Args:
-            y_pred: predicted values (tensor)
-            y_true: actual values (tensor)
-
-        Returns:
-            PnL metric
-        """
-        
-        target = np.exp(target).squeeze()
-        inv = inv[0].squeeze()
+    
+    def fully_added_weights(self, B, T):
         
         B, T = target.shape
         
-        w = np.zeros((B + T, ))  # (B + T,)
+        # w = np.zeros((B + T, ))  # (B + T,)
 
         inv = np.cumsum(inv[:,  ::-1], axis=-1)[:, ::-1]  # (B + C,)
         
@@ -138,4 +127,45 @@ class InvMetric(BaseMetric):
         log_pnl = np.log(np.clip(pnl, a_min=1e-12, a_max=None))
         
         return {'pnl': pnl, 'log_pnl': log_pnl, 'weights': w[1:-T]}
+    
+    def basic(self, output: dict, target: np.ndarray, leverage=None) -> float:
+        
+        if leverage is None:
+            leverage = self.leverage
+
+        R = np.exp(target.squeeze()) / np.exp(output[1].reshape(-1, 1))  # (B, T)
+
+        w = output[0].squeeze() * leverage
+
+        pnl = 1 + w * (R - 1) * (1 - self.fee) - self.fee * np.abs(w) * 2
+
+        pnl = np.clip(pnl, a_min=1e-12, a_max=None)
+
+        time_divisor = np.arange(1, pnl.shape[1] + 1, dtype=pnl.dtype).reshape(1, -1)  # (1, T)
+        log_pnl = np.log(pnl) / time_divisor  # (B, T)
+
+        # if self.exact:
+        #     log_pnl = np.log(np.mean(np.exp(log_pnl) - 1, axis=-1) + 1)  # (B,)
+        # else:
+        #     log_pnl = np.mean(log_pnl, axis=-1)  # (B,)
+
+        return {"pnl": pnl, "log_pnl": log_pnl, "weights": w}  # minimize negative log-pnl
+        
+    def forward(self, inputs, inv, target,  num_items_in_batch: int= None):
+        
+        """
+        Args:
+            y_pred: predicted values (tensor)
+            y_true: actual values (tensor)
+
+        Returns:
+            PnL metric
+        """
+        
+        # target = np.exp(target).squeeze()
+        # inv = inv[0].squeeze()
+        
+        return self.basic(inv, target, leverage=self.leverage)
+        
+
         
