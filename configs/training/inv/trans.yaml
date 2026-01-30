@@ -7,8 +7,8 @@ output_dir: checkpoints/forecast/mlp
 wandb_project_name: "crypto-inv-60"
 # === Données ===
 data_path: ../data/futures/dataset/
-symbols: "BTCUSDT,ETHUSDT,LTCUSDT,SOLUSDT,XRPUSDT,BCHUSDT,EOSUSDT,BNBUSDT,ADAUSDT,DOTUSDT,LINKUSDT,XLMUSDT"
-tgt_symbol: "SOLUSDT"
+symbols: "BTCUSDT,ETHUSDT,LTCUSDT,XRPUSDT,BCHUSDT,EOSUSDT,BNBUSDT,ADAUSDT,DOTUSDT,LINKUSDT,XLMUSDT"
+tgt_symbol: "BTCUSDT"
 start_date: "2020-01-01"
 tgt_mode: "close"
 
@@ -20,18 +20,20 @@ tgt_mode: "close"
 src_length: 1
 tgt_length: 1
 seg_length: 60
-type: mlp
+type: transformer2
 input_features: ["open", "high", "low", "close", "volume", "taker_buy_volume", "count"]
-hidden_dim: 256
+hidden_dim: 128
 output_dim: 60
 num_layers: 4
-dropout: 0.3
+dropout: 0.4  # Add dropout for regularization
 conv_kernel: 5
 pool_kernel: 1
+epsilon: 1.
+only_last: true
 loss_function: 
    type: inv
    leverage: 50.0
-   fee: 0.005
+   fee: 0.04
 
 # === Entraînement ===
 do_eval: true

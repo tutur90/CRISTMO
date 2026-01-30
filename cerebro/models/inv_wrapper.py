@@ -3,11 +3,12 @@ import torch.nn as nn
 from typing import Optional, Tuple
 from cerebro.models.base_model import BaseModel
 from cerebro.models.mlp import MLPCore
+from cerebro.models.transformer2 import TransformerCore
 
 
 models_dict = {
     'mlp': MLPCore,
-    # 'transformer': TransformerCore,
+    'transformer2': TransformerCore,
 }
 
 
@@ -59,11 +60,14 @@ class InvWrapper(BaseModel):
             loss_fn=loss_fn,
             **kwargs
         )
-        self.fc = nn.Sequential(
-            nn.Linear(hidden_dim + 1, hidden_dim),
-            nn.ReLU(),
-            nn.Linear(hidden_dim, output_dim)
-        )
+        # self.fc = nn.Sequential(
+        #     nn.Linear(hidden_dim + 1, hidden_dim),
+        #     nn.ReLU(),
+        #     nn.Linear(hidden_dim, output_dim)
+        # )
+        
+        self.symbol_emb = nn.Embedding(100, hidden_dim)  # Assuming max 100 unique symbols
+        
         
         self.fc = nn.Sequential(
             nn.Linear(hidden_dim , hidden_dim),
@@ -105,6 +109,8 @@ class InvWrapper(BaseModel):
         enc_out = self.encoder(x, symbols=symbols)  # (B, 1, hidden_dim)
         
         enc_out = enc_out[:, -1, :]  # (B, hidden_dim)
+        
+        enc_out = enc_out + self.symbol_emb(symbols)  # (B, hidden_dim)
         
         # enc_out = torch.cat([enc_out, self.rev_in.scale.reshape(-1, 1)/self.rev_in.last.reshape(-1, 1)], dim=-1)  # (B, hidden_dim)
         

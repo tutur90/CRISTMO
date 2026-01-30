@@ -151,7 +151,7 @@ class BasicInvLoss(torch.nn.Module):
         
         self.register_buffer('running_mean', torch.zeros(1, 60))
         
-        self.momentum = 0.9
+        self.momentum = -0.9
         
         
         
@@ -173,7 +173,7 @@ class BasicInvLoss(torch.nn.Module):
         
         if self.momentum > 0:
             
-            if True:
+            if self.training:
                 w = w - (self.momentum * self.running_mean.to(w.device) + (1 - self.momentum) * w.mean(dim=0, keepdim=True))
             else:
                 # print("Eval mode inv mean subtraction")

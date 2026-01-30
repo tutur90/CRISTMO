@@ -167,6 +167,8 @@ class TransformerCore(nn.Module):
         dropout: float = 0.0,
         epsilon: float = 1e-6,
         only_last: bool = True,
+        seg_length: int = 60, 
+        output_dim: int = 3,
         **kwargs
     ):
         """
@@ -188,7 +190,12 @@ class TransformerCore(nn.Module):
         
         print("TransformerCore only_last =", only_last)
 
+        self.feature_extractor = FeatureExtractor(input_dim, hidden_dim, seg_length)
+
+
+        self.positional_encoding = PositionalEncoding(hidden_dim, max_len=25)
         
+        self.symbol_emb = nn.Embedding(100, hidden_dim)  # Assuming max 100 unique symbols
         # Transformer layers
         self.transformer = nn.ModuleList([
             TransformerEncoderLayer(
@@ -205,8 +212,19 @@ class TransformerCore(nn.Module):
         
         self.start_idx = nn.Parameter(torch.zeros(1, 1, hidden_dim))
         
+                
+        self.fc = nn.Linear(hidden_dim, output_dim)
+        
 
     def forward(self, sources, labels=None, symbols=None, **kwargs):
+        
+        sources = self.feature_extractor(sources)
+
+        sources = self.positional_encoding(sources)
+
+        if symbols is not None:
+
+            x = torch.cat([self.symbol_emb(symbols).unsqueeze(1), sources], dim=1)  
         
         if self.only_last:
             x = sources[:, -1:, :]
@@ -218,6 +236,8 @@ class TransformerCore(nn.Module):
             x = sources
             for layer in self.transformer:
                 x = layer(x)
+                
+        x = self.fc(x[:, -1, :]).unsqueeze(1)  # (B, 1, output_dim)
 
         return x
     
@@ -228,12 +248,7 @@ class TransformerModel(BaseModel):
         super().__init__(input_features)
         
         self.loss_fn = loss_fn
-        self.feature_extractor = FeatureExtractor(len(input_features), hidden_dim, seg_length)
 
-
-        self.positional_encoding = PositionalEncoding(hidden_dim, max_len=25)
-        
-        self.symbol_emb = nn.Embedding(100, hidden_dim)  # Assuming max 100 unique symbols
 
         self.encoder = TransformerCore(
             input_dim=hidden_dim,
@@ -247,24 +262,21 @@ class TransformerModel(BaseModel):
             only_last=only_last
         )
 
-        self.fc = nn.Linear(hidden_dim, output_dim)
+
 
     def forward(self, sources, volumes=None, labels=None, symbols=None, **kwargs):
         B, T, C = sources.shape
 
+
         x = self.pre_forward(sources, volumes)
         
-        x = self.feature_extractor(x)
 
-        x = self.positional_encoding(x)
         
-        # if symbols is not None:
 
-        #     x = torch.cat([self.symbol_emb(symbols).unsqueeze(1), x], dim=1)  
-
+        
         x = self.encoder(x)
 
      
-        x = self.fc(x[:, -1, :]).unsqueeze(1)  # (B, 1, output_dim)
+
 
         return self.post_forward(x, labels)

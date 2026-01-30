@@ -8,11 +8,6 @@ from pytorch_tcn import TCN
 
 
 
-
-
-
-
-
 class TCN2Core(nn.Module):
     """TCN core using pytorch_tcn library for feature extraction."""
 
