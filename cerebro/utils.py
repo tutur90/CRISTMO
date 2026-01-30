@@ -135,7 +135,7 @@ class InvMetric(BaseMetric):
 
         R = np.exp(target.squeeze()) / np.exp(output[1].reshape(-1, 1))  # (B, T)
 
-        w = output[0].squeeze() * leverage
+        w = output[0].squeeze() 
 
         pnl = 1 + w * (R - 1) * (1 - self.fee) - self.fee * np.abs(w) * 2
 

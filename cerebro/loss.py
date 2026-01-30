@@ -142,9 +142,18 @@ class BasicInvLoss(torch.nn.Module):
         super().__init__()
         self.leverage = leverage
         self.fee = fee/100
-        self.output_norm = "weighted"
+        # self.output_norm = "weighted"
+        self.output_norm = None
         self.cumsum = False
         self.exact = True
+        # self.eq_weight = self.fee / 10
+        self.eq_weight = 0.0
+        
+        self.register_buffer('running_mean', torch.zeros(1, 60))
+        
+        self.momentum = 0.9
+        
+        
         
 
     def forward(self, output: torch.Tensor, target: torch.Tensor, leverage=None, num_items_in_batch: int= None) -> torch.Tensor:
@@ -155,7 +164,28 @@ class BasicInvLoss(torch.nn.Module):
         
         R = target.squeeze().exp()/ output["last"].reshape(-1, 1).exp()  # (B, T)
 
-        w = output["pred"].squeeze() * leverage
+
+        w = output["pred"].squeeze()  # (B, T)
+        
+        
+        w = torch.tanh(w / leverage) * leverage  # (B, T)
+        
+        
+        if self.momentum > 0:
+            
+            if True:
+                w = w - (self.momentum * self.running_mean.to(w.device) + (1 - self.momentum) * w.mean(dim=0, keepdim=True))
+            else:
+                # print("Eval mode inv mean subtraction")
+                w = w - self.running_mean.to(w.device)
+            
+            self.running_mean = self.momentum * self.running_mean + (1 - self.momentum) * w.mean(dim=0, keepdim=True).detach()
+            
+            
+            
+        
+        
+        output["pred"] = w  
         
         # print(w.mean().item(), w.std(dim=-1 ).mean().item(), w.std().mean().item())
 
@@ -165,15 +195,20 @@ class BasicInvLoss(torch.nn.Module):
         
         log_pnl = torch.log(pnl) / torch.arange(1, pnl.shape[1] + 1, device=pnl.device, dtype=pnl.dtype).unsqueeze(0)  # (B, T)  
         
+        if self.eq_weight > 0:
+        
+            log_pnl = log_pnl - w.mean(dim=0, keepdim=True).abs() * self.eq_weight 
+        
         if self.exact:
             log_pnl = ((log_pnl.exp()-1).mean(dim=-1)+1).log()  # (B,)
         else:
             log_pnl = log_pnl.mean(dim=-1)  # (B,)
             
         
+        output["loss"] = -log_pnl.mean() * 60 * 24 * 364  # minimize negative log-pnl
         
-
-        return -log_pnl.mean() * 60 * 24 * 364  # minimize negative log-pnl
+        
+        return output
 
     
     

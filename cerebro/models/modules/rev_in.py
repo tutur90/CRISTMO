@@ -63,7 +63,7 @@ class RevIn(nn.Module):
                 else:
                     self.scale = (x_centered.diff(dim=1).max(dim=1, keepdim=False).values ) + self.eps
             elif self.scale_type == 'none':
-                self.scale = torch.ones_like(self.std)
+                self.scale = torch.ones(B, 1, device=x.device)
             else:
                 raise ValueError(f"Unknown scale type: {self.scale_type}")
 

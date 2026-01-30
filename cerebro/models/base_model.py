@@ -67,6 +67,6 @@ class BaseModel(nn.Module):
         output["last"] = self.rev_in.last
         output["scale"] = self.rev_in.scale
         if labels is not None:
-            output["loss"] = self.loss_fn(output, labels)
+            output = self.loss_fn(output, labels)
         return output
     

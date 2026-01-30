@@ -64,6 +64,12 @@ class InvWrapper(BaseModel):
             nn.ReLU(),
             nn.Linear(hidden_dim, output_dim)
         )
+        
+        self.fc = nn.Sequential(
+            nn.Linear(hidden_dim , hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, output_dim)
+        )
 
         self.hidden_dim = hidden_dim
         self.num_layers = num_layers
@@ -100,7 +106,7 @@ class InvWrapper(BaseModel):
         
         enc_out = enc_out[:, -1, :]  # (B, hidden_dim)
         
-        enc_out = torch.cat([enc_out, self.rev_in.scale.reshape(-1, 1)/self.rev_in.last.reshape(-1, 1)], dim=-1)  # (B, hidden_dim)
+        # enc_out = torch.cat([enc_out, self.rev_in.scale.reshape(-1, 1)/self.rev_in.last.reshape(-1, 1)], dim=-1)  # (B, hidden_dim)
         
         out = self.fc(enc_out).unsqueeze(1)  # (B, 1, output_dim)
         

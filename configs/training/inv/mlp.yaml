@@ -30,7 +30,7 @@ conv_kernel: 5
 pool_kernel: 1
 loss_function: 
    type: inv
-   leverage: 1.0
+   leverage: 50.0
    fee: 0.005
 
 # === Entraînement ===
@@ -70,6 +70,8 @@ warmup_steps: 500
 # weight_decay: 0.0005
 
 include_for_metrics: ["loss"]
+
+seed: 44
 
 
 bf16: false

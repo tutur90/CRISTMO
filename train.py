@@ -201,6 +201,7 @@ def main():
         results["std_log_pnl"] = np.std(metrics["log_pnl"]) * np.sqrt(multiplicative_factor)
         results["avg_inv"] = np.mean(metrics["weights"])
         results["abs_avg_inv"] = np.mean(np.abs(metrics["weights"]))
+        results["abs_max_inv"] = np.max(np.abs(metrics["weights"]))
 
         return results
         
